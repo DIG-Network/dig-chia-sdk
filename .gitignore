@@ -1,0 +1,4 @@
+node_modules
+.dig
+dist
+dig.config.json
