@@ -1,6 +1,6 @@
 {
   "name": "dig-sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "",
   "type": "commonjs",
   "main": "./src/index.js",
