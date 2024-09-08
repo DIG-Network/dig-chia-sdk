@@ -1,9 +1,9 @@
 {
   "name": "dig-sdk",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "",
   "type": "commonjs",
-  "main": "./src/index.js",
+  "main": "./src/index.ts",
   "types": "./src/index.d.ts",
   "scripts": {
     "build": "rm -rf dist && tsc && npm run postbuild",
