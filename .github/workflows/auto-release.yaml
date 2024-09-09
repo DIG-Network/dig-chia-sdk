@@ -1,0 +1,48 @@
+name: Auto Tag
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: main-release-check
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clean workspace
+        uses: Chia-Network/actions/clean-workspace@main
+
+      - name: Checkout current branch
+        uses: actions/checkout@v3
+        with:
+          # Need PACKAGE_ADMIN_PAT token so when the tag is created, the tag automation runs
+          token: ${{ secrets.GH_ACCESS_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set Git identity
+        run: |
+          git config --local user.email "automation@michaeltaylor.dev"
+          git config --local user.name "Automation"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from package.json
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "Extracted version: $VERSION"
+          
+          # Set the version as an output for other steps to use
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          if git tag --list | grep -q "^$VERSION$"; then
+            echo "Tag $VERSION already exists, nothing to do."
+          else
+            echo "Tag does not exist. Creating and pushing tag."
+            git tag $VERSION -m "Release $VERSION"
+            git push origin $VERSION
+          fi
+        shell: bash

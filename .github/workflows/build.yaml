@@ -1,0 +1,52 @@
+name: Build and Publish to npm
+
+on:
+  push:
+    tags:
+      - "**"
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    name: Build and Publish to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18.x"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Extract Version and Determine Tag
+        id: extract-version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          if [[ "$VERSION" == *"alpha"* ]]; then
+            TAG="alpha"
+          elif [[ "$VERSION" == *"beta"* ]]; then
+            TAG="beta"
+          else
+            TAG="latest"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Publish to npm
+        run: |
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+          npm publish --tag ${{ env.TAG }} --access public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
