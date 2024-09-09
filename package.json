@@ -1,5 +1,5 @@
 {
-  "name": "dig-sdk",
+  "name": "@dignetwork/dig-sdk",
   "version": "1.1.0",
   "description": "",
   "type": "commonjs",
@@ -15,8 +15,7 @@
     "start": "ts-node src/index.ts",
     "server": "ts-node src/server.ts",
     "test": "mocha -r ts-node/register tests.ts",
-    "release": "standard-version",
-    "postrelease": "npm run build && git push --follow-tags && npm publish"
+    "prepare-release": "bash ./scripts/release.sh"
   },
   "author": "",
   "license": "ISC",
