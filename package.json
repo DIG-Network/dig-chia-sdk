@@ -5,6 +5,10 @@
   "type": "commonjs",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    "import": "./src/index.ts",
+    "require": "./dist/index.js"
+  },
   "scripts": {
     "build": "rm -rf dist && tsc && npm run postbuild",
     "postbuild": "copyfiles -u 1 \"src/**/*.crt\" \"src/**/*.key\" dist",
