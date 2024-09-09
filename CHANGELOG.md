@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/DIG-Network/dig-chia-sdk/compare/v1.0.9...v1.1.0) (2024-09-09)
+
+
+### Features
+
+* compile with type declarations ([138b41c](https://github.com/DIG-Network/dig-chia-sdk/commit/138b41c3a27ae1e95b76b3975f48822dd5d9b724))
+
 ### [1.0.9](https://github.com/DIG-Network/dig-chia-sdk/compare/v1.0.8...v1.0.9) (2024-09-08)
 
 ### [1.0.8](https://github.com/DIG-Network/dig-chia-sdk/compare/v1.0.7...v1.0.8) (2024-09-08)
