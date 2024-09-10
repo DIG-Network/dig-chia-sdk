@@ -31,7 +31,7 @@ import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
   DataIntegrityTreeOptions,
-} from "@dignetwork/data-integrity-tree";
+} from "../DataIntegrityTree";
 import { CreateStoreUserInputs } from "../types";
 import { askForStoreDetails } from "../prompts";
 import { FileCache } from "../utils/FileCache";
