@@ -33,9 +33,7 @@ export const createInitialConfig = (): void => {
 };
 
 export const setRemote = (remote: string): void => {
-  if (!fs.existsSync(CONFIG_FILE_PATH)) {
-    throw new Error("Config file not found.");
-  }
+  ensureDigConfig("");
 
   const config: Config = JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, "utf-8"));
   config.remote = remote;
@@ -45,9 +43,7 @@ export const setRemote = (remote: string): void => {
 };
 
 export const setActiveStore = (storeId: string): void => {
-  if (!fs.existsSync(CONFIG_FILE_PATH)) {
-    throw new Error("Config file not found.");
-  }
+  ensureDigConfig("");
 
   const config: Config = JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, "utf-8"));
   config.active_store = storeId;
@@ -161,10 +157,7 @@ export const getActiveStoreId = async (): Promise<Buffer | null> => {
  * @throws Will throw an error if the config file does not exist or cannot be parsed.
  */
 export const loadDigConfig = (baseDir: string): DigConfig => {
-  if (!fs.existsSync(CONFIG_FILE_PATH)) {
-    throw new Error(`Configuration file not found at ${CONFIG_FILE_PATH}`);
-  }
-
+  ensureDigConfig("");
   try {
     const configContent = fs.readFileSync(CONFIG_FILE_PATH, "utf-8");
     const config: DigConfig = JSON.parse(configContent);
