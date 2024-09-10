@@ -60,18 +60,31 @@ export class FullNodePeer {
   private static isValidIpAddress(ip: string): boolean {
     const ipv4Regex =
       /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-
     return ipv4Regex.test(ip);
   }
 
-  private static async fetchNewPeerIPs(): Promise<string[]> {
+  /**
+   * Retrieves the TRUSTED_FULLNODE IP from the environment
+   * and verifies if it is a valid IP address.
+   * 
+   * @returns {string | null} The valid IP address or null if invalid
+   */
+  private static getTrustedFullNode(): string | null {
     const trustedNodeIp = process.env.TRUSTED_FULLNODE || null;
+
+    if (trustedNodeIp && FullNodePeer.isValidIpAddress(trustedNodeIp)) {
+      return trustedNodeIp;
+    }
+    return null;
+  }
+
+  private static async fetchNewPeerIPs(): Promise<string[]> {
+    const trustedNodeIp = FullNodePeer.getTrustedFullNode();
     const priorityIps: string[] = [];
 
     // Prioritize trustedNodeIp
     if (
       trustedNodeIp &&
-      FullNodePeer.isValidIpAddress(trustedNodeIp) &&
       (await FullNodePeer.isPortReachable(trustedNodeIp, FULLNODE_PORT))
     ) {
       priorityIps.push(trustedNodeIp);
