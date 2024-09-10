@@ -112,8 +112,14 @@ class DataIntegrityTree {
     }
   }
 
-  public static from(storeId: string, options: DataIntegrityTreeOptions): DataIntegrityTree {
-    return new DataIntegrityTree(storeId, { ...options, disableInitialize: true });
+  public static from(
+    storeId: string,
+    options: DataIntegrityTreeOptions
+  ): DataIntegrityTree {
+    return new DataIntegrityTree(storeId, {
+      ...options,
+      disableInitialize: true,
+    });
   }
 
   /**
@@ -188,52 +194,46 @@ class DataIntegrityTree {
     if (!isHexString(key)) {
       throw new Error(`key must be a valid hex string: ${key}`);
     }
-  
     const uncompressedHash = crypto.createHash("sha256");
     const gzip = zlib.createGzip();
-  
+
     let sha256: string;
     const tempDir = path.join(this.storeDir, "tmp");
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     const tempFilePath = path.join(tempDir, `${crypto.randomUUID()}.gz`);
-  
+
     return new Promise((resolve, reject) => {
       const tempWriteStream = fs.createWriteStream(tempFilePath);
-  
-      // Update the hash with the original data
+
       readStream.on("data", (chunk) => {
         uncompressedHash.update(chunk);
       });
-  
-      // Pipe the read stream through gzip into the temporary write stream
+
       readStream.pipe(gzip).pipe(tempWriteStream);
-  
+
       tempWriteStream.on("finish", async () => {
-        let finalWriteStream: fs.WriteStream | undefined;
+        sha256 = uncompressedHash.digest("hex");
+
+        const finalWriteStream = this._createWriteStream(sha256);
+        const finalPath = finalWriteStream.path as string;
+
+        // Ensure the directory exists before copying the file
+        const finalDir = path.dirname(finalPath);
+        if (!fs.existsSync(finalDir)) {
+          fs.mkdirSync(finalDir, { recursive: true });
+        }
+
         try {
-          sha256 = uncompressedHash.digest("hex");
-  
-          finalWriteStream = this._createWriteStream(sha256);
-          const finalPath = finalWriteStream.path as string;
-  
-          // Ensure the directory exists
-          const finalDir = path.dirname(finalPath);
-          if (!fs.existsSync(finalDir)) {
-            fs.mkdirSync(finalDir, { recursive: true });
-          }
-  
-          // Copy the temporary gzipped file to the final destination
           await this._streamFile(tempFilePath, finalPath);
-          await unlink(tempFilePath); // Clean up the temporary file
-  
+          await unlink(tempFilePath);
+
           const combinedHash = crypto
             .createHash("sha256")
             .update(`${key}/${sha256}`)
             .digest("hex");
-  
-          // Check if the key already exists with the same hash
+
           if (
             Array.from(this.files.values()).some(
               (file) => file.hash === combinedHash
@@ -242,58 +242,34 @@ class DataIntegrityTree {
             console.log(`No changes detected for key: ${key}`);
             return resolve();
           }
-  
-          // Delete existing key if present
+
           if (this.files.has(key)) {
             this.deleteKey(key);
           }
-  
-          // Insert the new key with the hash
+
           console.log(`Inserted key: ${key}`);
           this.files.set(key, {
             hash: combinedHash,
             sha256: sha256,
           });
-  
+          await new Promise((resolve) => setTimeout(resolve, 100));
           this._rebuildTree();
+          await new Promise((resolve) => setTimeout(resolve, 100));
           resolve();
         } catch (err) {
-          // On error, cleanup the temporary file and reject
-          await unlink(tempFilePath).catch(() => {});
           reject(err);
-        } finally {
-          // Always close the final write stream if it exists
-          if (finalWriteStream) {
-            finalWriteStream.end();
-          }
         }
+
+        tempWriteStream.end();
+        finalWriteStream.end();
       });
-  
-      tempWriteStream.on("error", async (err) => {
-        // Close streams and clean up in case of error
-        tempWriteStream.destroy();
-        gzip.destroy();
-        readStream.destroy();
-  
-        await unlink(tempFilePath).catch(() => {}); // Clean up the temp file
+
+      tempWriteStream.on("error", (err) => {
+        tempWriteStream.end();
         reject(err);
       });
-  
-      readStream.on("error", async (err) => {
-        // Close streams and clean up in case of error
-        tempWriteStream.destroy();
-        gzip.destroy();
-        readStream.destroy();
-  
-        await unlink(tempFilePath).catch(() => {}); // Clean up the temp file
-        reject(err);
-      });
-  
-      gzip.on("error", (err) => {
-        // Handle errors in the gzip stream
-        tempWriteStream.destroy();
-        gzip.destroy();
-        readStream.destroy();
+
+      readStream.on("error", (err) => {
         reject(err);
       });
     });
@@ -413,15 +389,20 @@ class DataIntegrityTree {
     const manifestContent = fs.existsSync(manifestPath)
       ? fs.readFileSync(manifestPath, "utf-8").trim().split("\n")
       : [];
-  
+
     // Check if the last entry is the same as the rootHash to avoid duplicates
-    const latestRootHash = manifestContent.length > 0 ? manifestContent[manifestContent.length - 1] : null;
-  
+    const latestRootHash =
+      manifestContent.length > 0
+        ? manifestContent[manifestContent.length - 1]
+        : null;
+
     if (latestRootHash !== rootHash) {
       // Append the new rootHash if it is not the same as the last one
       fs.appendFileSync(manifestPath, `${rootHash}\n`);
     } else {
-      console.log(`Root hash ${rootHash} is already at the end of the file. Skipping append.`);
+      console.log(
+        `Root hash ${rootHash} is already at the end of the file. Skipping append.`
+      );
     }
   }
 
