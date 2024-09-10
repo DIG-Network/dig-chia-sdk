@@ -173,6 +173,8 @@ export class FullNodePeer {
               // If the error is WebSocket-related or timeout, reset the peer
               if (error.message.includes("WebSocket") || error.message.includes("Operation timed out")) {
                 FullNodePeer.cachedPeer = null;
+                // @ts-ignore
+                FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
                 const newPeer = await FullNodePeer.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
