@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.10](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.9...v0.0.1-alpha.10) (2024-09-10)
+
+
+### Bug Fixes
+
+* better trusted node handling ([0b1fefe](https://github.com/DIG-Network/dig-chia-sdk/commit/0b1fefebbf4b8b3a27a0d8b7af0afe59bc457aef))
+
 ### [0.0.1-alpha.9](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.8...v0.0.1-alpha.9) (2024-09-10)
 
 
