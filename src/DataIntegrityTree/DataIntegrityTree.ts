@@ -188,46 +188,52 @@ class DataIntegrityTree {
     if (!isHexString(key)) {
       throw new Error(`key must be a valid hex string: ${key}`);
     }
+  
     const uncompressedHash = crypto.createHash("sha256");
     const gzip = zlib.createGzip();
-
+  
     let sha256: string;
     const tempDir = path.join(this.storeDir, "tmp");
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     const tempFilePath = path.join(tempDir, `${crypto.randomUUID()}.gz`);
-
+  
     return new Promise((resolve, reject) => {
       const tempWriteStream = fs.createWriteStream(tempFilePath);
-
+  
+      // Update the hash with the original data
       readStream.on("data", (chunk) => {
         uncompressedHash.update(chunk);
       });
-
+  
+      // Pipe the read stream through gzip into the temporary write stream
       readStream.pipe(gzip).pipe(tempWriteStream);
-
+  
       tempWriteStream.on("finish", async () => {
-        sha256 = uncompressedHash.digest("hex");
-
-        const finalWriteStream = this._createWriteStream(sha256);
-        const finalPath = finalWriteStream.path as string;
-
-        // Ensure the directory exists before copying the file
-        const finalDir = path.dirname(finalPath);
-        if (!fs.existsSync(finalDir)) {
-          fs.mkdirSync(finalDir, { recursive: true });
-        }
-
+        let finalWriteStream: fs.WriteStream | undefined;
         try {
+          sha256 = uncompressedHash.digest("hex");
+  
+          finalWriteStream = this._createWriteStream(sha256);
+          const finalPath = finalWriteStream.path as string;
+  
+          // Ensure the directory exists
+          const finalDir = path.dirname(finalPath);
+          if (!fs.existsSync(finalDir)) {
+            fs.mkdirSync(finalDir, { recursive: true });
+          }
+  
+          // Copy the temporary gzipped file to the final destination
           await this._streamFile(tempFilePath, finalPath);
-          await unlink(tempFilePath);
-
+          await unlink(tempFilePath); // Clean up the temporary file
+  
           const combinedHash = crypto
             .createHash("sha256")
             .update(`${key}/${sha256}`)
             .digest("hex");
-
+  
+          // Check if the key already exists with the same hash
           if (
             Array.from(this.files.values()).some(
               (file) => file.hash === combinedHash
@@ -236,28 +242,58 @@ class DataIntegrityTree {
             console.log(`No changes detected for key: ${key}`);
             return resolve();
           }
-
+  
+          // Delete existing key if present
           if (this.files.has(key)) {
             this.deleteKey(key);
           }
-
+  
+          // Insert the new key with the hash
           console.log(`Inserted key: ${key}`);
           this.files.set(key, {
             hash: combinedHash,
             sha256: sha256,
           });
+  
           this._rebuildTree();
           resolve();
         } catch (err) {
+          // On error, cleanup the temporary file and reject
+          await unlink(tempFilePath).catch(() => {});
           reject(err);
+        } finally {
+          // Always close the final write stream if it exists
+          if (finalWriteStream) {
+            finalWriteStream.end();
+          }
         }
       });
-
-      tempWriteStream.on("error", (err) => {
+  
+      tempWriteStream.on("error", async (err) => {
+        // Close streams and clean up in case of error
+        tempWriteStream.destroy();
+        gzip.destroy();
+        readStream.destroy();
+  
+        await unlink(tempFilePath).catch(() => {}); // Clean up the temp file
         reject(err);
       });
-
-      readStream.on("error", (err) => {
+  
+      readStream.on("error", async (err) => {
+        // Close streams and clean up in case of error
+        tempWriteStream.destroy();
+        gzip.destroy();
+        readStream.destroy();
+  
+        await unlink(tempFilePath).catch(() => {}); // Clean up the temp file
+        reject(err);
+      });
+  
+      gzip.on("error", (err) => {
+        // Handle errors in the gzip stream
+        tempWriteStream.destroy();
+        gzip.destroy();
+        readStream.destroy();
         reject(err);
       });
     });
