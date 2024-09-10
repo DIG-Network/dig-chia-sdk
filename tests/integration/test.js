@@ -27,7 +27,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const crypto = __importStar(require("crypto"));
 const os = __importStar(require("os"));
-const DataIntegrityTree_1 = require("../../src/Data@dignetwork/data-integrity-tree");
+const DataIntegrityTree_1 = require("@dignetwork/data-integrity-tree");
 /**
  * Calculate the SHA-256 hash of a buffer using the crypto module.
  * @param buffer - The buffer.

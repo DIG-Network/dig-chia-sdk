@@ -66,6 +66,59 @@ export class DigNetwork {
     return { generationIndex, lastLocalRootHash };
   }
 
+  public async uploadStoreHead(digPeer: DigPeer): Promise<void> {
+    // First make sure that the remote store is up to date.
+    const rootHistory = await this.dataStore.getRootHistory();
+    const localManifestHashes = await this.dataStore.getManifestHashes();
+    const remoteManifestFile = await digPeer.propagationServer.getStoreData(
+      "manifest.dat"
+    );
+
+    const remoteManifestHashes = remoteManifestFile.split("\n").filter(Boolean);
+    const onChainRootHashes = rootHistory.map((root) => root.root_hash);
+
+    // Check that remote manifest is one behind on-chain root hashes
+    if (remoteManifestHashes.length !== onChainRootHashes.length - 1) {
+      throw new Error(
+        "Remote manifest should be one behind the on-chain root. Cannot push head."
+      );
+    }
+
+    // Compare each remote manifest hash with the corresponding on-chain root hash
+    for (let i = 0; i < remoteManifestHashes.length; i++) {
+      if (remoteManifestHashes[i] !== onChainRootHashes[i]) {
+        throw new Error(
+          `Remote manifest does not match on-chain root at index ${i}. Cannot push head.`
+        );
+      }
+    }
+
+    // Get the files for the latest local manifest hash
+    const filesToUpload = await this.dataStore.getFileSetForRootHash(
+      localManifestHashes[localManifestHashes.length - 1]
+    );
+
+    if (!filesToUpload.length) {
+      console.log("No files to upload.");
+      return;
+    }
+
+    // Upload files to the remote peer with a progress bar
+    await this.runProgressBar(
+      filesToUpload.length,
+      "Store Data",
+      async (progress) => {
+        for (const filePath of filesToUpload) {
+          const relativePath = path
+            .relative(this.storeDir, filePath)
+            .replace(/\\/g, "/");
+          await digPeer.propagationServer.pushFile(filePath, relativePath);
+          progress.increment();
+        }
+      }
+    );
+  }
+
   // Uploads the store to a specific peer
   public async uploadStore(digPeer: DigPeer): Promise<void> {
     const { generationIndex } = await this.uploadPreflight(digPeer);
@@ -88,7 +141,6 @@ export class DigNetwork {
       "Store Data",
       async (progress) => {
         for (const filePath of filesToUpload) {
-          console.log(`Uploading ${filePath}...`);
           const relativePath = path
             .relative(this.storeDir, filePath)
             .replace(/\\/g, "/");
@@ -108,14 +160,17 @@ export class DigNetwork {
   }
 
   public static unsubscribeFromStore(storeId: string): void {
-    fs.rmdirSync(path.join(DIG_FOLDER_PATH, "stores", storeId), { recursive: true });
+    fs.rmdirSync(path.join(DIG_FOLDER_PATH, "stores", storeId), {
+      recursive: true,
+    });
     fs.unlinkSync(path.join(DIG_FOLDER_PATH, "stores", storeId + ".json"));
   }
 
   // Downloads files from the network based on the manifest
   public async downloadFiles(
     forceDownload: boolean = false,
-    renderProgressBar: boolean = true
+    renderProgressBar: boolean = true,
+    skipData: boolean = false
   ): Promise<void> {
     try {
       const rootHistory = await this.dataStore.getRootHistory();
@@ -164,19 +219,21 @@ export class DigNetwork {
         if (datFileContent.root !== rootHash)
           throw new Error("Root hash mismatch");
 
-        for (const file of Object.keys(datFileContent.files)) {
-          const filePath = getFilePathFromSha256(
-            datFileContent.files[file].sha256,
-            path.join(this.storeDir, "data")
-          );
-          const isInDataDir = filePath.startsWith(
-            path.join(this.storeDir, "data")
-          );
-          await this.downloadFileFromPeers(
-            getFilePathFromSha256(datFileContent.files[file].sha256, "data"),
-            filePath,
-            forceDownload || !isInDataDir
-          );
+        if (!skipData) {
+          for (const file of Object.keys(datFileContent.files)) {
+            const filePath = getFilePathFromSha256(
+              datFileContent.files[file].sha256,
+              path.join(this.storeDir, "data")
+            );
+            const isInDataDir = filePath.startsWith(
+              path.join(this.storeDir, "data")
+            );
+            await this.downloadFileFromPeers(
+              getFilePathFromSha256(datFileContent.files[file].sha256, "data"),
+              filePath,
+              forceDownload || !isInDataDir
+            );
+          }
         }
 
         if (localManifestHashes[i] !== rootHash) newRootHashes.push(rootHash);
@@ -305,6 +362,8 @@ export class DigNetwork {
     task: (progress: any) => Promise<void>
   ): Promise<void> {
     // Using 'any' to work around TypeScript issues
+    const oldConsoleLog = console.log;
+    console.log = () => {}; // Suppress console.log output
     const multiBar = new MultiBar(
       {
         clearOnComplete: false,
@@ -315,6 +374,9 @@ export class DigNetwork {
       Presets.shades_classic
     );
     const progress = multiBar.create(total, 0, { name });
-    await task(progress).finally(() => multiBar.stop());
+    await task(progress).finally(() => {
+      multiBar.stop();
+      console.log = oldConsoleLog; // Restore console.log
+    });
   }
 }

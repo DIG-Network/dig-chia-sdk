@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs, { read } from "fs";
 import path from "path";
 import {
   writerDelegatedPuzzleFromKey,
@@ -27,7 +27,7 @@ import {
 import { selectUnspentCoins, calculateFeeForCoinSpends } from "./coins";
 import { RootHistoryItem, DatFile } from "../types";
 import { validateFileSha256 } from "../utils";
-
+import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
   DataIntegrityTreeOptions,
@@ -653,5 +653,49 @@ export class DataStore {
     }
 
     return updateStoreResponse.newStore;
+  }
+
+  public async getFileSetForRootHash(rootHash: string): Promise<string[]> {
+    const datFilePath = path.join(STORE_PATH, this.storeId, `${rootHash}.dat`);
+    const datFileContent = JSON.parse(fs.readFileSync(datFilePath, "utf-8"));
+    const heightDatFilePath = path.join(
+      STORE_PATH,
+      this.storeId,
+      "height.json"
+    );
+    const manifestFilePath = path.join(
+      STORE_PATH,
+      this.storeId,
+      "manifest.dat"
+    );
+
+    const filesInvolved: string[] = [];
+    filesInvolved.push(manifestFilePath);
+    filesInvolved.push(datFilePath);
+    filesInvolved.push(heightDatFilePath);
+
+    for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {
+      const filepath = path.join(STORE_PATH, this.storeId, "data", fileKey);
+
+      const filePath = getFilePathFromSha256(
+        datFileContent.files[fileKey].sha256,
+        path.join(STORE_PATH, this.storeId, "data")
+      );
+
+      filesInvolved.push(filePath);
+    }
+
+    return filesInvolved;
+  }
+
+  public getManifestHashes(): string[] {
+    const manifestFilePath = path.join(
+      STORE_PATH,
+      this.storeId,
+      "manifest.dat"
+    );
+    return fs.existsSync(manifestFilePath)
+      ? fs.readFileSync(manifestFilePath, "utf-8").split("\n").filter(Boolean)
+      : [];
   }
 }
