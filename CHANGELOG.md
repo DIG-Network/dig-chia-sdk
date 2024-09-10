@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.3](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.2...v0.0.1-alpha.3) (2024-09-10)
+
+
+### Features
+
+* use data integrity tree module ([32fb088](https://github.com/DIG-Network/dig-chia-sdk/commit/32fb088708836d7586de3ea3426058b4bd33d5ca))
+
 ### [0.0.1-alpha.2](https://github.com/DIG-Network/dig-chia-sdk/compare/v1.1.1-alpha.0...v0.0.1-alpha.2) (2024-09-09)
 
 ### [1.1.1-alpha.0](https://github.com/DIG-Network/dig-chia-sdk/compare/v1.1.0...v1.1.1-alpha.0) (2024-09-09)
