@@ -13,6 +13,9 @@ if [ "$CURRENT_BRANCH" != "develop" ]; then
   exit 1
 fi
 
+# First run the build to make sure it compiles
+npm run build
+
 # Run standard-version for version bumping
 npx standard-version --prerelease alpha
 
