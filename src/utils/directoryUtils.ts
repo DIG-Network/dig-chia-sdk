@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import ignore from "ignore";
-import { DataIntegrityTree } from "@dignetwork/data-integrity-tree";
+import { DataIntegrityTree } from "../DataIntegrityTree";
 
 /**
  * Recursively add all files in a directory to the Merkle tree, skipping the .dig, .git folders, and files in .gitignore.

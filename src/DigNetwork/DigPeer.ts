@@ -4,7 +4,7 @@ import { ContentServer } from "./ContentServer";
 import { PropagationServer } from "./PropagationServer";
 import { IncentiveServer } from "./IncentiveServer";
 import { DataStore } from "../blockchain";
-import { DataIntegrityTree } from "@dignetwork/data-integrity-tree";
+import { DataIntegrityTree } from "../DataIntegrityTree";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   sendXch,
