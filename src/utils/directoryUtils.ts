@@ -6,36 +6,29 @@ import pLimit from "p-limit";
 import { DataIntegrityTree } from "../DataIntegrityTree";
 
 
-const limit = pLimit(10); // Limit the concurrency to 10 (adjust based on your system's file descriptor limit)
+// Function to dynamically load p-limit since it's an ES module
+async function loadPLimit() {
+  const { default: pLimit } = await import('p-limit');
+  return pLimit;
+}
 
-// Promisify fs methods
-const readdir = promisify(fs.readdir);
-const stat = promisify(fs.stat);
-const readFile = promisify(fs.readFile);
-
-/**
- * Recursively add all files in a directory to the Merkle tree, skipping the .dig, .git folders, and files in .gitignore.
- * @param datalayer - The DataStoreManager instance.
- * @param dirPath - The directory path.
- * @param baseDir - The base directory for relative paths.
- */
 export const addDirectory = async (
   datalayer: DataIntegrityTree,
   dirPath: string,
   baseDir: string = dirPath
 ): Promise<void> => {
+  const limit = await loadPLimit();  // Dynamically load p-limit and get the default export
   const ig = ignore();
   const gitignorePath = path.join(baseDir, ".gitignore");
 
   // Load .gitignore rules if the file exists
   if (fs.existsSync(gitignorePath)) {
-    const gitignoreContent = await readFile(gitignorePath, "utf-8");
+    const gitignoreContent = fs.readFileSync(gitignorePath, "utf-8");
     ig.add(gitignoreContent);
   }
 
-  const files = await readdir(dirPath);
+  const files = fs.readdirSync(dirPath);
 
-  // Process each file or directory
   await Promise.all(
     files.map(async (file) => {
       const filePath = path.join(dirPath, file);
@@ -46,14 +39,13 @@ export const addDirectory = async (
         return;
       }
 
-      const fileStat = await stat(filePath);
+      const stat = fs.statSync(filePath);
 
-      if (fileStat.isDirectory()) {
-        // Recursively process the directory
-        return addDirectory(datalayer, filePath, baseDir);
+      if (stat.isDirectory()) {
+        await addDirectory(datalayer, filePath, baseDir);
       } else {
-        // Process the file with limited concurrency
-        return limit(() =>
+        // Use the dynamically loaded p-limit to limit concurrent file processing
+        return limit(10)(() =>
           new Promise<void>((resolve, reject) => {
             const stream = fs.createReadStream(filePath);
             datalayer
@@ -66,6 +58,7 @@ export const addDirectory = async (
     })
   );
 };
+
 
 
 /**
