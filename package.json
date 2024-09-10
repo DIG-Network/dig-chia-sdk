@@ -25,6 +25,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@dignetwork/data-integrity-tree": "^0.0.22",
     "bip39": "^3.1.0",
     "chia-bls": "^1.0.2",
     "chia-config-loader": "^1.0.1",
