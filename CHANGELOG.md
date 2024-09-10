@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.6](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.5...v0.0.1-alpha.6) (2024-09-10)
+
+
+### Features
+
+* add timeout logic to peers ([63c61b9](https://github.com/DIG-Network/dig-chia-sdk/commit/63c61b99e98512c3fe07732434df900b99be6a10))
+
 ### [0.0.1-alpha.5](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.4...v0.0.1-alpha.5) (2024-09-10)
 
 ### [0.0.1-alpha.4](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.3...v0.0.1-alpha.4) (2024-09-10)
