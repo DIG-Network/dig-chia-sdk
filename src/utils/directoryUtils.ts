@@ -4,7 +4,10 @@ import ignore from "ignore";
 import { DataIntegrityTree } from "../DataIntegrityTree";
 
 // Custom concurrency handler
-const limitConcurrency = async (concurrencyLimit: number, tasks: (() => Promise<void>)[]) => {
+const limitConcurrency = async (
+  concurrencyLimit: number,
+  tasks: (() => Promise<void>)[]
+) => {
   const results = [];
   const executing: Promise<void>[] = [];
 
@@ -61,16 +64,22 @@ export const addDirectory = async (
       tasks.push(() => addDirectory(datalayer, filePath, baseDir));
     } else {
       // Add a task for each file to be processed
-      tasks.push(() =>
-        new Promise<void>((resolve, reject) => {
-          const stream = fs.createReadStream(filePath);
-          datalayer
-            .upsertKey(stream, Buffer.from(relativePath).toString("hex"))
-            .then(resolve)
-            .catch(reject);
-        })
+      tasks.push(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const stream = fs.createReadStream(filePath);
+            datalayer
+              .upsertKey(stream, Buffer.from(relativePath).toString("hex"))
+              .then(async () => {
+                await new Promise<void>((resolve) => setTimeout(resolve, 100));
+                resolve();
+              })
+              .catch(reject);
+          })
       );
     }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
 
   // Run tasks with limited concurrency (set the concurrency limit as needed)
