@@ -129,8 +129,6 @@ export class DigNetwork {
       path.resolve(DIG_FOLDER_PATH, "stores")
     );
 
-    console.log(filesToUpload);
-
     if (!filesToUpload.length) {
       console.log("No files to upload.");
       return;
@@ -362,8 +360,6 @@ export class DigNetwork {
     task: (progress: any) => Promise<void>
   ): Promise<void> {
     // Using 'any' to work around TypeScript issues
-    const oldConsoleLog = console.log;
-    console.log = () => {}; // Suppress console.log output
     const multiBar = new MultiBar(
       {
         clearOnComplete: false,
@@ -376,7 +372,6 @@ export class DigNetwork {
     const progress = multiBar.create(total, 0, { name });
     await task(progress).finally(() => {
       multiBar.stop();
-      console.log = oldConsoleLog; // Restore console.log
     });
   }
 }

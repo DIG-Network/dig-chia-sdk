@@ -139,21 +139,39 @@ export class FullNodePeer {
     return FullNodePeer.memoizedFetchNewPeerIPs();
   }
 
-  private static createPeerProxy(
-    peer: Peer,
-    certFile: string,
-    keyFile: string
-  ): Peer {
+  private static createPeerProxy(peer: Peer): Peer {
     return new Proxy(peer, {
       get: (target, prop) => {
         const originalMethod = (target as any)[prop];
-
+  
         if (typeof originalMethod === "function") {
           return async (...args: any[]) => {
+            let timeoutId: NodeJS.Timeout | undefined;
+  
+            // Start the timeout to forget the peer after 1 minute
+            const timeoutPromise = new Promise<null>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                FullNodePeer.cachedPeer = null;
+                reject(new Error("Operation timed out. Reconnecting to a new peer."));
+              }, 60000); // 1 minute
+            });
+  
             try {
-              return await originalMethod.apply(target, args);
+              // Run the original method and race it against the timeout
+              const result = await Promise.race([
+                originalMethod.apply(target, args),
+                timeoutPromise,
+              ]);
+  
+              // Clear the timeout if the operation succeeded
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+              }
+  
+              return result;
             } catch (error: any) {
-              if (error.message.includes("WebSocket")) {
+              // If the error is WebSocket-related or timeout, reset the peer
+              if (error.message.includes("WebSocket") || error.message.includes("Operation timed out")) {
                 FullNodePeer.cachedPeer = null;
                 const newPeer = await FullNodePeer.getBestPeer();
                 return (newPeer as any)[prop](...args);
@@ -200,7 +218,7 @@ export class FullNodePeer {
               certFile,
               keyFile
             );
-            return FullNodePeer.createPeerProxy(peer, certFile, keyFile);
+            return FullNodePeer.createPeerProxy(peer);
           } catch (error: any) {
             console.error(
               `Failed to create peer for IP ${ip}: ${error.message}`
