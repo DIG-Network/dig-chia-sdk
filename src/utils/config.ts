@@ -176,11 +176,12 @@ export const loadDigConfig = (baseDir: string): DigConfig => {
  */
 export const ensureDigConfig = (baseDir: string): DigConfig => {
   if (!fs.existsSync(CONFIG_FILE_PATH)) {
+    fs.mkdirSync(DIG_FOLDER_PATH, { recursive: true });
     const defaultConfig: DigConfig = { deploy_dir: "./dist" };
     fs.writeFileSync(
       CONFIG_FILE_PATH,
       JSON.stringify(defaultConfig, null, 4),
-      "utf-8"
+      "utf-8",
     );
     console.log(`Created new dig.config.json at ${CONFIG_FILE_PATH}`);
     return defaultConfig;
