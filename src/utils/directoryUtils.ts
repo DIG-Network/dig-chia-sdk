@@ -76,3 +76,27 @@ export const addDirectory = async (
   // Run tasks with limited concurrency (set the concurrency limit as needed)
   await limitConcurrency(10, tasks); // Adjust 10 based on your system limits
 };
+
+/**
+ * Calculate the total size of the DIG_FOLDER_PATH
+ * @param folderPath - The path of the folder to calculate size.
+ * @returns The total size of the folder in bytes.
+ */
+export const calculateFolderSize = (folderPath: string): bigint => {
+  let totalSize = BigInt(0);
+
+  const files = fs.readdirSync(folderPath);
+
+  for (const file of files) {
+    const filePath = path.join(folderPath, file);
+    const stat = fs.statSync(filePath);
+
+    if (stat.isDirectory()) {
+      totalSize += calculateFolderSize(filePath);
+    } else {
+      totalSize += BigInt(stat.size);
+    }
+  }
+
+  return totalSize;
+};
