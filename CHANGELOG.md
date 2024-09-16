@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.19](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.18...v0.0.1-alpha.19) (2024-09-16)
+
+
+### Features
+
+* query if the content server has a roothash ([24ba222](https://github.com/DIG-Network/dig-chia-sdk/commit/24ba2227b59e55d874b618fe074d71a61bb63b47))
+
 ### [0.0.1-alpha.18](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.17...v0.0.1-alpha.18) (2024-09-16)
 
 
