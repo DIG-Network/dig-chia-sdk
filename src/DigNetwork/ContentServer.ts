@@ -1,22 +1,31 @@
+import fs from "fs";
 import http from "http";
 import { URL } from "url";
 import { Readable } from "stream";
-import { DataStore } from "../blockchain";
+import { getOrCreateSSLCerts } from "../utils/ssl";
 
 export class ContentServer {
   private ipAddress: string;
   private storeId: string;
-  private static readonly port = 80;
+  private static certPath: string;
+  private static keyPath: string;
+  private static readonly port = 4161;
 
   constructor(ipAddress: string, storeId: string) {
     this.ipAddress = ipAddress;
     this.storeId = storeId;
+
+    if (!ContentServer.certPath || !ContentServer.keyPath) {
+      const { certPath, keyPath } = getOrCreateSSLCerts();
+      ContentServer.certPath = certPath;
+      ContentServer.keyPath = keyPath;
+    }
   }
 
   // Method to get the content of a specified key from the peer, with optional challenge query
   public async getKey(key: string, rootHash: string, challengeHex?: string): Promise<string> {
     // Construct the base URL
-    let url = `http://${this.ipAddress}/chia.${this.storeId}.${rootHash}/${key}`;
+    let url = `https://${this.ipAddress}/chia.${this.storeId}.${rootHash}/${key}`;
 
     // If a challenge is provided, append it as a query parameter
     if (challengeHex) {
@@ -43,25 +52,25 @@ export class ContentServer {
 
   // Method to get the .well-known information
   public async getWellKnown(): Promise<any> {
-    const url = `http://${this.ipAddress}/.well-known`;
+    const url = `https://${this.ipAddress}/.well-known`;
     return this.fetchJson(url);
   }
 
   // Method to get the list of known stores
   public async getKnownStores(): Promise<any> {
-    const url = `http://${this.ipAddress}/.well-known/stores`;
+    const url = `https://${this.ipAddress}/.well-known/stores`;
     return this.fetchJson(url);
   }
 
   // Method to get the index of all stores
   public async getStoresIndex(): Promise<any> {
-    const url = `http://${this.ipAddress}/`;
+    const url = `https://${this.ipAddress}/`;
     return this.fetchJson(url);
   }
 
   // Method to get the index of keys in a store
   public async getKeysIndex(): Promise<any> {
-    const url = `http://${this.ipAddress}/${this.storeId}`;
+    const url = `https://${this.ipAddress}/${this.storeId}`;
     return this.fetchJson(url);
   }
 
@@ -69,7 +78,7 @@ export class ContentServer {
   public async headKey(
     key: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
-    const url = `http://${this.ipAddress}/${this.storeId}/${key}`;
+    const url = `https://${this.ipAddress}/${this.storeId}/${key}`;
     return this.head(url); // Return the object from head method
   }
 
@@ -78,14 +87,14 @@ export class ContentServer {
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
-    const url = `http://${this.ipAddress}/${this.storeId}`;
+    const url = `https://${this.ipAddress}/${this.storeId}`;
     console.log({ url });
     return this.head(url); // Return the object from head method
   }
 
   public streamKey(key: string): Promise<Readable> {
     return new Promise((resolve, reject) => {
-      const url = `http://${this.ipAddress}/${this.storeId}/${key}`;
+      const url = `https://${this.ipAddress}/${this.storeId}/${key}`;
       const urlObj = new URL(url);
 
       const requestOptions = {
@@ -141,6 +150,9 @@ export class ContentServer {
             (urlObj.protocol === "http:" ? 80 : ContentServer.port),
           path: urlObj.pathname + urlObj.search,
           method: "HEAD",
+          key: fs.readFileSync(ContentServer.keyPath),
+          cert: fs.readFileSync(ContentServer.certPath),
+          rejectUnauthorized: false,
         };
 
         const request = http.request(requestOptions, (response) => {
@@ -244,6 +256,9 @@ export class ContentServer {
         port: urlObj.port || ContentServer.port,
         path: urlObj.pathname + urlObj.search, // Include query params
         method: "GET",
+        key: fs.readFileSync(ContentServer.keyPath),
+        cert: fs.readFileSync(ContentServer.certPath),
+        rejectUnauthorized: false,
       };
 
       const request = http.request(requestOptions, (response) => {
