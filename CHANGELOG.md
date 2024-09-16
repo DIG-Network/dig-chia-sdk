@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.17](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.16...v0.0.1-alpha.17) (2024-09-16)
+
+
+### Features
+
+* add the ability to request chunks of data from integrity tree ([cd578a8](https://github.com/DIG-Network/dig-chia-sdk/commit/cd578a86e46aab9236999ed1f011a482f14870de))
+
 ### [0.0.1-alpha.16](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.15...v0.0.1-alpha.16) (2024-09-10)
 
 

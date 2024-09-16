@@ -495,7 +495,12 @@ class DataIntegrityTree {
    * @param rootHash - The root hash of the tree. Defaults to the latest root hash.
    * @returns The readable stream for the file.
    */
-  getValueStream(hexKey: string, rootHash: string | null = null): Readable {
+  getValueStream(
+    hexKey: string,
+    rootHash: string | null = null,
+    byteOffset: number | null = null,
+    length: number | null = null
+  ): Readable {
     if (!isHexString(hexKey)) {
       throw new Error("key must be a valid hex string");
     }
@@ -526,8 +531,29 @@ class DataIntegrityTree {
       throw new Error(`File at path ${filePath} does not exist`);
     }
 
-    // Create a read stream and pipe it through a decompression stream using the same algorithm (gzip)
-    const readStream = fs.createReadStream(filePath);
+    const fileSize = fs.statSync(filePath).size;
+
+    // Validate offset and length
+    if (byteOffset !== null && length !== null) {
+      if (byteOffset + length > fileSize) {
+        throw new Error(
+          `Offset (${byteOffset}) and length (${length}) exceed the file size (${fileSize}).`
+        );
+      }
+    }
+
+    // Create the read stream with optional byte range
+    const options: { start?: number; end?: number } = {};
+
+    if (byteOffset !== null) {
+      options.start = byteOffset;
+    }
+
+    if (length !== null && byteOffset !== null) {
+      options.end = byteOffset + length - 1; // `end` is inclusive, hence `byteOffset + length - 1`
+    }
+
+    const readStream = fs.createReadStream(filePath, options);
     const decompressStream = zlib.createGunzip();
 
     // Return the combined stream as a generic Readable stream

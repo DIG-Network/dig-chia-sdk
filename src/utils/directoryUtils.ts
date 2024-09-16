@@ -8,27 +8,28 @@ const limitConcurrency = async (
   concurrencyLimit: number,
   tasks: (() => Promise<void>)[]
 ) => {
-  const results = [];
   const executing: Promise<void>[] = [];
 
   for (const task of tasks) {
     const p = task();
-    results.push(p);
-
-    // Once the limit is reached, wait for one to complete
-    if (executing.length >= concurrencyLimit) {
-      await Promise.race(executing);
-    }
 
     // Add the new task to the executing array
     executing.push(p);
 
     // When a task completes, remove it from the executing array
-    p.finally(() => executing.splice(executing.indexOf(p), 1));
+    const cleanup = p.finally(() => {
+      executing.splice(executing.indexOf(cleanup), 1);
+    });
+
+    // Once the limit is reached, wait for one to complete
+    if (executing.length >= concurrencyLimit) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 100));
+      await Promise.race(executing);
+    }
   }
 
   // Wait for all remaining tasks to complete
-  return Promise.all(results);
+  return Promise.all(executing);
 };
 
 export const addDirectory = async (
@@ -70,16 +71,11 @@ export const addDirectory = async (
             const stream = fs.createReadStream(filePath);
             datalayer
               .upsertKey(stream, Buffer.from(relativePath).toString("hex"))
-              .then(async () => {
-                await new Promise<void>((resolve) => setTimeout(resolve, 100));
-                resolve();
-              })
+              .then(() => resolve())
               .catch(reject);
           })
       );
     }
-
-    await new Promise<void>((resolve) => setTimeout(resolve, 100));
   }
 
   // Run tasks with limited concurrency (set the concurrency limit as needed)
