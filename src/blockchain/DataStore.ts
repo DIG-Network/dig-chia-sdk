@@ -36,7 +36,6 @@ import { CreateStoreUserInputs } from "../types";
 import { askForStoreDetails } from "../prompts";
 import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
-import { h } from "chia-bls";
 
 const stat = promisify(fs.stat);
 const readdir = promisify(fs.readdir);
