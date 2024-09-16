@@ -83,7 +83,7 @@ export class ContentServer {
   }
 
   // Method to check if a specific store exists (HEAD request)
-  public async headStore(options?: { hasRootHash: boolean}): Promise<{
+  public async headStore(options?: { hasRootHash: string}): Promise<{
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {

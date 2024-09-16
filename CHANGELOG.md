@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.20](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.19...v0.0.1-alpha.20) (2024-09-16)
+
+
+### Features
+
+* find any peer on the network with the store and or key ([15cf0af](https://github.com/DIG-Network/dig-chia-sdk/commit/15cf0af395ccc9009a6e9ff898c6f5d21ba4d92a))
+
 ### [0.0.1-alpha.19](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.18...v0.0.1-alpha.19) (2024-09-16)
 
 
