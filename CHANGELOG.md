@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.18](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.17...v0.0.1-alpha.18) (2024-09-16)
+
+
+### Features
+
+* add ssl to content server adapter ([6d45228](https://github.com/DIG-Network/dig-chia-sdk/commit/6d4522880b7d8e3ab1bf3c86f93d54007e5da220))
+
 ### [0.0.1-alpha.17](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.16...v0.0.1-alpha.17) (2024-09-16)
 
 
