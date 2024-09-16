@@ -157,6 +157,53 @@ export class DigNetwork {
     await digNetwork.downloadFiles(true);
   }
 
+  public static async findPeerWithStoreKey(
+    storeId: string,
+    rootHash: string,
+    key: string
+  ): Promise<string | null> {
+    const peerBlackList: string[] = [];
+    const serverCoin = new ServerCoin(storeId);
+
+    while (true) {
+      try {
+        const digPeers = await serverCoin.sampleCurrentEpoch(1, peerBlackList);
+        if (digPeers.length === 0) break;
+
+        const peerIp = digPeers[0];
+        const digPeer = new DigPeer(peerIp, storeId);
+        const storeResponse = await digPeer.contentServer.headStore({
+          hasRootHash: rootHash,
+        });
+
+        if (
+          storeResponse.success &&
+          storeResponse.headers?.["x-has-rootHash"] === "true"
+        ) {
+          if (!key) return peerIp;
+
+          const keyResponse = await digPeer.contentServer.headKey(key);
+          if (
+            keyResponse.success &&
+            keyResponse.headers?.["x-key-exists"] === "true"
+          ) {
+            return peerIp;
+          }
+        }
+
+        peerBlackList.push(peerIp);
+      } catch (error) {
+        console.error(
+          "Error while sampling the epoch or contacting peer:",
+          error
+        );
+        break;
+      }
+    }
+
+    return null;
+  }
+
   public static unsubscribeFromStore(storeId: string): void {
     fs.rmdirSync(path.join(DIG_FOLDER_PATH, "stores", storeId), {
       recursive: true,
