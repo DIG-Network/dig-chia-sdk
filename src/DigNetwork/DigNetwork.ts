@@ -160,7 +160,7 @@ export class DigNetwork {
   public static async findPeerWithStoreKey(
     storeId: string,
     rootHash: string,
-    key: string
+    key?: string
   ): Promise<string | null> {
     const peerBlackList: string[] = [];
     const serverCoin = new ServerCoin(storeId);
