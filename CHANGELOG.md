@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.23](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.22...v0.0.1-alpha.23) (2024-09-17)
+
+
+### Features
+
+* add sendEqualBulkPayments and sendBulkPayments ([ca4a1e5](https://github.com/DIG-Network/dig-chia-sdk/commit/ca4a1e5dde47a4492bfb4b74390c93e12447348d))
+* add sendEqualBulkPayments and sendBulkPayments ([1451d83](https://github.com/DIG-Network/dig-chia-sdk/commit/1451d83b23db4a42b83729e176236ec0f5a0da12))
+
 ### [0.0.1-alpha.22](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.21...v0.0.1-alpha.22) (2024-09-17)
 
 
