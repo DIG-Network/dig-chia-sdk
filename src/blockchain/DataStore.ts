@@ -523,6 +523,8 @@ export class DataStore {
     }
 
     let filesIntegrityIntact = true;
+
+    // At this point we have verified that the root history and manifest file match
     for (const rootHash of manifestHashes) {
       const datFilePath = path.join(
         STORE_PATH,
@@ -546,11 +548,14 @@ export class DataStore {
       }
 
       for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {
-        const integrityCheck = validateFileSha256(
+        // We are going to check if the sha256 belongs to the tree, and then we are going to make sure
+        // that the file is in the data folder and that the sha256 of the file matches the one in the dat file
+        const belongsInTree = await this.Tree.verifyKeyIntegrity(fileData.sha256, rootHash);
+        const fileIntegrityCheck = validateFileSha256(
           fileData.sha256,
           path.join(STORE_PATH, this.storeId, "data")
         );
-        if (!integrityCheck) {
+        if (!fileIntegrityCheck || !belongsInTree) {
           filesIntegrityIntact = false;
         }
       }
