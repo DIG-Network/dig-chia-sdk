@@ -69,7 +69,9 @@ export class DigPeer {
       }
 
       // Fetch the manifest.dat file content from the propagation server
-      const manifestContent = await this.propagationServer.getStoreData("manifest.dat");
+      const manifestContent = await this.propagationServer.getStoreData(
+        "manifest.dat"
+      );
       const manifestHashes: string[] = manifestContent
         .split("\n")
         .filter(Boolean);
@@ -175,7 +177,9 @@ export class DigPeer {
       }
 
       // Fetch the manifest.dat file content from the content server
-      const manifestContent = await this.propagationServer.getStoreData("manifest.dat");
+      const manifestContent = await this.propagationServer.getStoreData(
+        "manifest.dat"
+      );
       const manifestHashes: string[] = manifestContent
         .split("\n")
         .filter(Boolean);
@@ -188,24 +192,42 @@ export class DigPeer {
     }
   }
 
-  public async sendPayment(walletName: string, amount: bigint): Promise<void> {
-    const paymentAddress = await this.contentServer.getPaymentAddress();
-    console.log(`Sending ${amount} Mojos to ${paymentAddress}...`);
+  public static sendEqualBulkPayments(
+    walletName: string,
+    puzzleHashes: Buffer[],
+    totalAmount: bigint
+  ): Promise<void> {
+    const amountPerPuzzleHash = totalAmount / BigInt(puzzleHashes.length);
 
+    const outputs: { puzzleHash: Buffer; amount: bigint }[] = puzzleHashes.map(
+      (puzzleHash) => ({
+        puzzleHash,
+        amount: amountPerPuzzleHash,
+      })
+    );
+  
+    return DigPeer.sendBulkPayments(walletName, outputs);
+  }
+
+  public static async sendBulkPayments(
+    walletName: string,
+    outputs: { puzzleHash: Buffer; amount: bigint }[]
+  ): Promise<void> {
     const fee = BigInt(1000);
     const wallet = await Wallet.load(walletName);
     const publicSyntheticKey = await wallet.getPublicSyntheticKey();
     const peer = await FullNodePeer.connect();
-    const coins = await selectUnspentCoins(peer, amount, fee, [], walletName);
-    const paymentAddressPuzzleHash = addressToPuzzleHash(paymentAddress);
-
-  
-    const outputs = [
-      {
-        puzzleHash: paymentAddressPuzzleHash,
-        amount: amount,
-      },
-    ];
+    const totalAmount = outputs.reduce(
+      (acc, output) => acc + output.amount,
+      BigInt(0)
+    );
+    const coins = await selectUnspentCoins(
+      peer,
+      totalAmount,
+      fee,
+      [],
+      walletName
+    );
 
     const coinSpends = await sendXch(publicSyntheticKey, coins, outputs, fee);
 
@@ -222,5 +244,13 @@ export class DigPeer {
     }
 
     await FullNodePeer.waitForConfirmation(getCoinId(coins[0]));
+  }
+
+  public async sendPayment(walletName: string, amount: bigint): Promise<void> {
+    const paymentAddress = await this.contentServer.getPaymentAddress();
+    const paymentAddressPuzzleHash = addressToPuzzleHash(paymentAddress);
+    return DigPeer.sendBulkPayments(walletName, [
+      { puzzleHash: paymentAddressPuzzleHash, amount },
+    ]);
   }
 }
