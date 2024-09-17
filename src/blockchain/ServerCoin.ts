@@ -19,8 +19,9 @@ const serverCoinCollateral = 300_000_000;
 
 export class ServerCoin {
   private storeId: string;
-  public static readonly serverCoinManager = new NconfManager("server_coin.json");
-
+  public static readonly serverCoinManager = new NconfManager(
+    "server_coin.json"
+  );
 
   constructor(storeId: string) {
     this.storeId = storeId;
@@ -178,19 +179,8 @@ export class ServerCoin {
     );
   }
 
-  // Sample server coins for the current epoch
-  public async sampleCurrentEpoch(
-    sampleSize: number = 5,
-    blacklist: string[] = []
-  ): Promise<string[]> {
-    const epoch = ServerCoin.getCurrentEpoch();
-    return this.sampleServerCoinsByEpoch(epoch, sampleSize, blacklist);
-  }
-
-  // Sample server coins by epoch
-  public async sampleServerCoinsByEpoch(
+  public async getAllEpochPeers(
     epoch: number,
-    sampleSize: number = 5,
     blacklist: string[] = []
   ): Promise<string[]> {
     const epochBasedHint = morphLauncherId(
@@ -225,8 +215,33 @@ export class ServerCoin {
       console.log("Server Coin Peers: ", serverCoinPeers);
     }
 
-    // Convert the Set back to an array if needed
-    return _.sampleSize(Array.from(serverCoinPeers), sampleSize);
+    return Array.from(serverCoinPeers);
+  }
+
+  public async getActiveEpochPeers(
+    blacklist: string[] = []
+  ): Promise<string[]> {
+    const epoch = ServerCoin.getCurrentEpoch();
+    return this.getAllEpochPeers(epoch, blacklist);
+  }
+
+  // Sample server coins for the current epoch
+  public async sampleCurrentEpoch(
+    sampleSize: number = 5,
+    blacklist: string[] = []
+  ): Promise<string[]> {
+    const epoch = ServerCoin.getCurrentEpoch();
+    return this.sampleServerCoinsByEpoch(epoch, sampleSize, blacklist);
+  }
+
+  // Sample server coins by epoch
+  public async sampleServerCoinsByEpoch(
+    epoch: number,
+    sampleSize: number = 5,
+    blacklist: string[] = []
+  ): Promise<string[]> {
+    const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
+    return _.sampleSize(serverCoinPeers, sampleSize);
   }
 
   // Get the current epoch based on the current timestamp
@@ -352,7 +367,10 @@ export class ServerCoin {
             coins = coins.filter((c: Coin) => c !== coinInfo);
 
             // Update the config to reflect the remaining coins for this IP
-            await ServerCoin.serverCoinManager.setConfigValue(`${storeCoin}:${ip}`, coins);
+            await ServerCoin.serverCoinManager.setConfigValue(
+              `${storeCoin}:${ip}`,
+              coins
+            );
           }
 
           // If no coins are left for this IP, optionally remove the entire IP entry
@@ -368,7 +386,10 @@ export class ServerCoin {
         // If no IPs are left for this store, optionally remove the store entry
         if (Object.keys(allServerCoins[storeCoin]).length === 0) {
           delete allServerCoins[storeCoin];
-          await ServerCoin.serverCoinManager.setConfigValue(storeCoin, undefined);
+          await ServerCoin.serverCoinManager.setConfigValue(
+            storeCoin,
+            undefined
+          );
         }
       }
     }
