@@ -194,18 +194,29 @@ export class DigPeer {
 
   public static sendEqualBulkPayments(
     walletName: string,
-    puzzleHashes: Buffer[],
+    addresses: string[],
     totalAmount: bigint
   ): Promise<void> {
+    // Use a Set to ensure unique addresses
+    const uniqueAddresses = Array.from(new Set(addresses));
+
+    // Convert unique addresses to puzzle hashes
+    const puzzleHashes = uniqueAddresses.map((address) =>
+      addressToPuzzleHash(address)
+    );
+
+    // Calculate amount per puzzle hash
     const amountPerPuzzleHash = totalAmount / BigInt(puzzleHashes.length);
 
+    // Create outputs array
     const outputs: { puzzleHash: Buffer; amount: bigint }[] = puzzleHashes.map(
       (puzzleHash) => ({
         puzzleHash,
         amount: amountPerPuzzleHash,
       })
     );
-  
+
+    // Call the sendBulkPayments function with the generated outputs
     return DigPeer.sendBulkPayments(walletName, outputs);
   }
 
