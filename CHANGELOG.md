@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.24](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.23...v0.0.1-alpha.24) (2024-09-17)
+
+
+### Bug Fixes
+
+* address bulk payment fee, better store validation ([76d1dd0](https://github.com/DIG-Network/dig-chia-sdk/commit/76d1dd0c0f9a6a165599e06fc1ef01652a98f882))
+
 ### [0.0.1-alpha.23](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.22...v0.0.1-alpha.23) (2024-09-17)
 
 
