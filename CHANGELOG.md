@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.22](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.21...v0.0.1-alpha.22) (2024-09-17)
+
+
+### Features
+
+* add getAllEpochPeers and getActiveEpochPeers to ServerCoin class ([1228ad0](https://github.com/DIG-Network/dig-chia-sdk/commit/1228ad03eb6bd609e6cd7ab1aa687c4f4e5d264c))
+
 ### [0.0.1-alpha.21](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.20...v0.0.1-alpha.21) (2024-09-16)
 
 
