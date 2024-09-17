@@ -178,70 +178,64 @@ export class PropagationServer {
     { nonce: string; lastUploadedHash: string; generationIndex: number } | false
   > {
     const remote = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}`;
-    return waitForPromise(
-      () => {
-        return new Promise<
-          | { nonce: string; lastUploadedHash: string; generationIndex: number }
-          | false
-        >((resolve, reject) => {
-          const url = new URL(remote);
 
-          const options = {
-            hostname: url.hostname,
-            port: url.port,
-            path: url.pathname,
-            method: "HEAD",
-            headers: {
-              Authorization: `Basic ${Buffer.from(
-                `${username}:${password}`
-              ).toString("base64")}`,
-            },
-            key: fs.readFileSync(PropagationServer.keyPath),
-            cert: fs.readFileSync(PropagationServer.certPath),
-            rejectUnauthorized: false, // Allow self-signed certificates
-          };
+    return new Promise<
+      | { nonce: string; lastUploadedHash: string; generationIndex: number }
+      | false
+    >((resolve, reject) => {
+      const url = new URL(remote);
 
-          const req = https.request(options, (res) => {
-            if (res.statusCode === 200) {
-              // Check if the headers are present and valid
-              const nonce = res.headers["x-nonce"];
-              const lastUploadedHash =
-                res.headers?.["x-last-uploaded-hash"] ||
-                "0000000000000000000000000000000000000000000000000000000000000000";
-              const generationIndex = res.headers?.["x-generation-index"] || 0;
+      const options = {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "HEAD",
+        headers: {
+          Authorization: `Basic ${Buffer.from(
+            `${username}:${password}`
+          ).toString("base64")}`,
+        },
+        key: fs.readFileSync(PropagationServer.keyPath),
+        cert: fs.readFileSync(PropagationServer.certPath),
+        rejectUnauthorized: false, // Allow self-signed certificates
+      };
 
-              console.log({ nonce, lastUploadedHash, generationIndex });
+      const req = https.request(options, (res) => {
+        if (res.statusCode === 200) {
+          // Check if the headers are present and valid
+          const nonce = res.headers["x-nonce"];
+          const lastUploadedHash =
+            res.headers?.["x-last-uploaded-hash"] ||
+            "0000000000000000000000000000000000000000000000000000000000000000";
+          const generationIndex = res.headers?.["x-generation-index"] || 0;
 
-              if (nonce) {
-                resolve({
-                  nonce: nonce as string,
-                  lastUploadedHash: lastUploadedHash as string,
-                  generationIndex: Number(generationIndex),
-                });
-              } else {
-                reject(new Error("Missing required headers in the response."));
-              }
-            } else {
-              reject(
-                new Error(
-                  `Failed to perform preflight check: ${res.statusCode} ${res.statusMessage}`
-                )
-              );
-            }
-          });
+          console.log({ nonce, lastUploadedHash, generationIndex });
 
-          req.on("error", (err) => {
-            console.error(err.message);
-            resolve(false); // Resolve to false if there is an error
-          });
+          if (nonce) {
+            resolve({
+              nonce: nonce as string,
+              lastUploadedHash: lastUploadedHash as string,
+              generationIndex: Number(generationIndex),
+            });
+          } else {
+            reject(new Error("Missing required headers in the response."));
+          }
+        } else {
+          reject(
+            new Error(
+              `Failed to perform preflight check: ${res.statusCode} ${res.statusMessage}`
+            )
+          );
+        }
+      });
 
-          req.end();
-        });
-      },
-      "Performing remote preflight",
-      "Preflight succeeded.",
-      "Error on preflight."
-    );
+      req.on("error", (err) => {
+        console.error(err.message);
+        resolve(false); // Resolve to false if there is an error
+      });
+
+      req.end();
+    });
   }
 
   // Core method to upload a file directly to the server using a stream

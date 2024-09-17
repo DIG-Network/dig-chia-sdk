@@ -224,7 +224,8 @@ export class DigPeer {
     walletName: string,
     outputs: { puzzleHash: Buffer; amount: bigint }[]
   ): Promise<void> {
-    const fee = BigInt(1000);
+    const feePerCondition = BigInt(1000);
+    const totalFee = feePerCondition * BigInt(outputs.length);
     const wallet = await Wallet.load(walletName);
     const publicSyntheticKey = await wallet.getPublicSyntheticKey();
     const peer = await FullNodePeer.connect();
@@ -235,12 +236,12 @@ export class DigPeer {
     const coins = await selectUnspentCoins(
       peer,
       totalAmount,
-      fee,
+      totalFee,
       [],
       walletName
     );
 
-    const coinSpends = await sendXch(publicSyntheticKey, coins, outputs, fee);
+    const coinSpends = await sendXch(publicSyntheticKey, coins, outputs, totalFee);
 
     const sig = signCoinSpends(
       coinSpends,
