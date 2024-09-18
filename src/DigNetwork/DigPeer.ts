@@ -297,6 +297,6 @@ export class DigPeer {
     const transformedBuffer = hash.digest();
 
     // Return the 32-byte hash as a hex string
-    return transformedBuffer.toString("hex");
+    return transformedBuffer;
   }
 }
