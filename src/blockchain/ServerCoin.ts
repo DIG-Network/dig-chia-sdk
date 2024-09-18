@@ -39,7 +39,7 @@ export class ServerCoin {
         BigInt(1000000)
       );
 
-      const currentEpoch = ServerCoin.getCurrentEpoch();
+      const { epoch: currentEpoch} = ServerCoin.getCurrentEpoch();
       const epochBasedHint = morphLauncherId(
         Buffer.from(this.storeId, "hex"),
         BigInt(currentEpoch)
@@ -221,7 +221,7 @@ export class ServerCoin {
   public async getActiveEpochPeers(
     blacklist: string[] = []
   ): Promise<string[]> {
-    const epoch = ServerCoin.getCurrentEpoch();
+    const { epoch } = ServerCoin.getCurrentEpoch();
     return this.getAllEpochPeers(epoch, blacklist);
   }
 
@@ -230,7 +230,7 @@ export class ServerCoin {
     sampleSize: number = 5,
     blacklist: string[] = []
   ): Promise<string[]> {
-    const epoch = ServerCoin.getCurrentEpoch();
+    const { epoch } = ServerCoin.getCurrentEpoch();
     return this.sampleServerCoinsByEpoch(epoch, sampleSize, blacklist);
   }
 
@@ -245,15 +245,15 @@ export class ServerCoin {
   }
 
   // Get the current epoch based on the current timestamp
-  public static getCurrentEpoch(): number {
-    return ServerCoin.calculateEpoch(new Date());
+  public static getCurrentEpoch(): { epoch: number; round: number } {
+    return ServerCoin.calculateEpochAndRound(new Date());
   }
 
   // Ensure server coin exists for the current epoch
   public async ensureServerCoinExists(peerIp: string): Promise<void> {
     try {
       console.log(`Ensuring server coin exists for store ${this.storeId}...`);
-      const currentEpoch = ServerCoin.getCurrentEpoch();
+      const { epoch: currentEpoch } = ServerCoin.getCurrentEpoch();
       const serverCoins = await this.getServerCoinsForStore(peerIp);
 
       // Check if a server coin already exists for the current epoch
@@ -301,7 +301,7 @@ export class ServerCoin {
   // Melt outdated server coins
   public async meltOutdatedEpochs(peerIp: string): Promise<void> {
     try {
-      const currentEpoch = ServerCoin.getCurrentEpoch();
+      const { epoch: currentEpoch } = ServerCoin.getCurrentEpoch();
       let serverCoins = await this.getServerCoinsForStore(peerIp);
 
       // Filter out coins that are not in the current epoch
@@ -433,14 +433,17 @@ export class ServerCoin {
   }
 
   // Static method to calculate the current epoch
-  public static calculateEpoch(currentTimestampUTC: Date): number {
+  public static calculateEpochAndRound(currentTimestampUTC: Date): {
+    epoch: number;
+    round: number;
+  } {
     const firstEpochStart = new Date(Date.UTC(2024, 8, 3, 0, 0)); // Sept 3, 2024, 00:00 UTC
 
     // Convert the current timestamp to milliseconds
     const currentTimestampMillis = currentTimestampUTC.getTime();
 
     // Calculate the number of milliseconds in one epoch (7 days)
-    const millisecondsInEpoch = 7 * 24 * 60 * 60 * 1000;
+    const millisecondsInEpoch = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
     // Calculate the difference in milliseconds between the current timestamp and the first epoch start
     const differenceMillis = currentTimestampMillis - firstEpochStart.getTime();
@@ -448,6 +451,16 @@ export class ServerCoin {
     // Calculate the current epoch number
     const epochNumber = Math.floor(differenceMillis / millisecondsInEpoch) + 1;
 
-    return epochNumber;
+    // Calculate the milliseconds elapsed since the start of the current epoch
+    const elapsedMillisInCurrentEpoch = differenceMillis % millisecondsInEpoch;
+
+    // Calculate the number of milliseconds in a round (10 minutes)
+    const millisecondsInRound = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+    // Calculate the current round number
+    const roundNumber =
+      Math.floor(elapsedMillisInCurrentEpoch / millisecondsInRound) + 1;
+
+    return { epoch: epochNumber, round: roundNumber };
   }
 }
