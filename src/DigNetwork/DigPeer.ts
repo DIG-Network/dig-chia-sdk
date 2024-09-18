@@ -279,7 +279,7 @@ export class DigPeer {
     return DigPeer.sendBulkPayments(walletName, [output]);
   }
 
-  public createPaymentHint(storeId: Buffer) {
+  public static createPaymentHint(storeId: Buffer) {
     // Ensure the input is a 32-byte buffer
     if (!Buffer.isBuffer(storeId) || storeId.length !== 32) {
       throw new Error("Invalid input. Must be a 32-byte buffer.");
