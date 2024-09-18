@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.26](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.25...v0.0.1-alpha.26) (2024-09-18)
+
+
+### Features
+
+* add payment hint generator ([0a3da7b](https://github.com/DIG-Network/dig-chia-sdk/commit/0a3da7bbdc7bf4d42511a62feecc29dd31fd3709))
+
 ### [0.0.1-alpha.25](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.24...v0.0.1-alpha.25) (2024-09-18)
 
 
