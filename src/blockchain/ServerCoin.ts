@@ -7,7 +7,7 @@ import {
   signCoinSpends,
   ServerCoin as ServerCoinDriver,
   Coin,
-} from "datalayer-driver";
+} from "@dignetwork/datalayer-driver";
 import { FullNodePeer } from "./FullNodePeer";
 import { selectUnspentCoins } from "./coins";
 import { Wallet } from "./Wallet";

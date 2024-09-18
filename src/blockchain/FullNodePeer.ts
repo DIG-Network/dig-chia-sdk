@@ -1,7 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs";
-import { Peer } from "datalayer-driver";
+import { Peer } from "@dignetwork/datalayer-driver";
 import { Tls } from "chia-server-coin";
 import { resolve4 } from "dns/promises";
 import net from "net";

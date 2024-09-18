@@ -1,4 +1,4 @@
-import { Coin } from "datalayer-driver";
+import { Coin } from "@dignetwork/datalayer-driver";
 
 export interface FileDetails {
   filename: string;
