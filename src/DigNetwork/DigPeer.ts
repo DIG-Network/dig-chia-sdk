@@ -5,13 +5,13 @@ import { PropagationServer } from "./PropagationServer";
 import { IncentiveServer } from "./IncentiveServer";
 import { DataStore } from "../blockchain";
 import { DataIntegrityTree } from "../DataIntegrityTree";
-import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   sendXch,
   addressToPuzzleHash,
   signCoinSpends,
   getCoinId,
-} from "datalayer-driver";
+  Output,
+} from "@dignetwork/datalayer-driver";
 import { FullNodePeer } from "../blockchain";
 import { Wallet } from "../blockchain";
 import { selectUnspentCoins } from "../blockchain/coins";
@@ -196,7 +196,7 @@ export class DigPeer {
     walletName: string,
     addresses: string[],
     totalAmount: bigint,
-    memo: string[]
+    memos: Buffer[]
   ): Promise<void> {
     // Use a Set to ensure unique addresses
     const uniqueAddresses = Array.from(new Set(addresses));
@@ -210,13 +210,11 @@ export class DigPeer {
     const amountPerPuzzleHash = totalAmount / BigInt(puzzleHashes.length);
 
     // Create outputs array
-    const outputs: { puzzleHash: Buffer; amount: bigint }[] = puzzleHashes.map(
-      (puzzleHash) => ({
-        puzzleHash,
-        amount: amountPerPuzzleHash,
-        memo,
-      })
-    );
+    const outputs: Output[] = puzzleHashes.map((puzzleHash) => ({
+      puzzleHash,
+      amount: amountPerPuzzleHash,
+      memos,
+    }));
 
     // Call the sendBulkPayments function with the generated outputs
     return DigPeer.sendBulkPayments(walletName, outputs);
@@ -224,7 +222,7 @@ export class DigPeer {
 
   public static async sendBulkPayments(
     walletName: string,
-    outputs: { puzzleHash: Buffer; amount: bigint }[]
+    outputs: Output[]
   ): Promise<void> {
     const feePerCondition = BigInt(1000);
     const totalFee = feePerCondition * BigInt(outputs.length);
@@ -268,14 +266,14 @@ export class DigPeer {
   public async sendPayment(
     walletName: string,
     amount: bigint,
-    memo: string[] = []
+    memos: Buffer[] = []
   ): Promise<void> {
     const paymentAddress = await this.contentServer.getPaymentAddress();
     const paymentAddressPuzzleHash = addressToPuzzleHash(paymentAddress);
-    const output: { puzzleHash: Buffer; amount: bigint; memo: string[] } = {
+    const output: Output = {
       puzzleHash: paymentAddressPuzzleHash,
       amount,
-      memo,
+      memos,
     };
 
     return DigPeer.sendBulkPayments(walletName, [output]);

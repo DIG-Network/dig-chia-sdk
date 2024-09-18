@@ -13,7 +13,7 @@ import {
   addFee,
   updateStoreMetadata,
   syntheticKeyToPuzzleHash,
-} from "datalayer-driver";
+} from "@dignetwork/datalayer-driver";
 import { promisify } from "util";
 import { FullNodePeer } from "./FullNodePeer";
 import { Wallet } from "./Wallet";

@@ -23,7 +23,7 @@ import {
   getCost,
   CoinSpend,
   getCoinId,
-} from "datalayer-driver";
+} from "@dignetwork/datalayer-driver";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { FileCache } from "../utils/FileCache";
 

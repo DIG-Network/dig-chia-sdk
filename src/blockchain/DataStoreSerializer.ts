@@ -4,7 +4,7 @@ import {
   Proof,
   DataStoreMetadata,
   DelegatedPuzzle,
-} from "datalayer-driver";
+} from "@dignetwork/datalayer-driver";
 import { Buffer } from "buffer";
 
 export class DataStoreSerializer {
