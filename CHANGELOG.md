@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.25](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.24...v0.0.1-alpha.25) (2024-09-18)
+
+
+### Features
+
+* calculate epoch and round ([0eba812](https://github.com/DIG-Network/dig-chia-sdk/commit/0eba8123d51c0f992adefadf856796947f867f40))
+
 ### [0.0.1-alpha.24](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.23...v0.0.1-alpha.24) (2024-09-17)
 
 
