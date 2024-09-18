@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.29](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.28...v0.0.1-alpha.29) (2024-09-18)
+
+
+### Features
+
+* update datalayer-driver ([17f648b](https://github.com/DIG-Network/dig-chia-sdk/commit/17f648b72a122bfe4677471fa33d1f312e3ba87b))
+
 ### [0.0.1-alpha.28](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.26...v0.0.1-alpha.28) (2024-09-18)
 
 
