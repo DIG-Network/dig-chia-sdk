@@ -25,6 +25,7 @@
     "LICENSE"
   ],
   "dependencies": {
+    "@dignetwork/datalayer-driver": "^0.1.24",
     "bip39": "^3.1.0",
     "chia-bls": "^1.0.2",
     "chia-config-loader": "^1.0.1",

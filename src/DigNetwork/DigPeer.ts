@@ -195,7 +195,8 @@ export class DigPeer {
   public static sendEqualBulkPayments(
     walletName: string,
     addresses: string[],
-    totalAmount: bigint
+    totalAmount: bigint,
+    memo: string[]
   ): Promise<void> {
     // Use a Set to ensure unique addresses
     const uniqueAddresses = Array.from(new Set(addresses));
@@ -213,6 +214,7 @@ export class DigPeer {
       (puzzleHash) => ({
         puzzleHash,
         amount: amountPerPuzzleHash,
+        memo,
       })
     );
 
@@ -241,7 +243,12 @@ export class DigPeer {
       walletName
     );
 
-    const coinSpends = await sendXch(publicSyntheticKey, coins, outputs, totalFee);
+    const coinSpends = await sendXch(
+      publicSyntheticKey,
+      coins,
+      outputs,
+      totalFee
+    );
 
     const sig = signCoinSpends(
       coinSpends,
@@ -258,11 +265,40 @@ export class DigPeer {
     await FullNodePeer.waitForConfirmation(getCoinId(coins[0]));
   }
 
-  public async sendPayment(walletName: string, amount: bigint): Promise<void> {
+  public async sendPayment(
+    walletName: string,
+    amount: bigint,
+    memo: string[] = []
+  ): Promise<void> {
     const paymentAddress = await this.contentServer.getPaymentAddress();
     const paymentAddressPuzzleHash = addressToPuzzleHash(paymentAddress);
-    return DigPeer.sendBulkPayments(walletName, [
-      { puzzleHash: paymentAddressPuzzleHash, amount },
-    ]);
+    const output: { puzzleHash: Buffer; amount: bigint; memo: string[] } = {
+      puzzleHash: paymentAddressPuzzleHash,
+      amount,
+      memo,
+    };
+
+    return DigPeer.sendBulkPayments(walletName, [output]);
+  }
+
+  public createPaymentHint(storeId: Buffer) {
+    // Ensure the input is a 32-byte buffer
+    if (!Buffer.isBuffer(storeId) || storeId.length !== 32) {
+      throw new Error("Invalid input. Must be a 32-byte buffer.");
+    }
+
+    // Define the seed
+    const seed = "dig";
+
+    // Combine the seed and the original buffer
+    const combinedBuffer = Buffer.concat([Buffer.from(seed), storeId]);
+
+    // Apply SHA-256 hash to the combined buffer
+    const hash = crypto.createHash("sha256");
+    hash.update(combinedBuffer);
+    const transformedBuffer = hash.digest();
+
+    // Return the 32-byte hash as a hex string
+    return transformedBuffer.toString("hex");
   }
 }
