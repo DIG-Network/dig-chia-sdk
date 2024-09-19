@@ -286,7 +286,7 @@ export class DigPeer {
     }
 
     // Define the seed
-    const seed = "dig";
+    const seed = "digpayment";
 
     // Combine the seed and the original buffer
     const combinedBuffer = Buffer.concat([Buffer.from(seed), storeId]);

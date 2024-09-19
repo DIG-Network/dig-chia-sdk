@@ -6,6 +6,7 @@ import { getDeltaFiles } from "../utils/deltaUtils";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
+import { RootHistoryItem } from "../types";
 
 export class DigNetwork {
   private dataStore: DataStore;
@@ -160,9 +161,10 @@ export class DigNetwork {
   public static async findPeerWithStoreKey(
     storeId: string,
     rootHash: string,
-    key?: string
+    key?: string,
+    intialBlackList: string[] = []
   ): Promise<string | null> {
-    const peerBlackList: string[] = [];
+    const peerBlackList: string[] = intialBlackList;
     const serverCoin = new ServerCoin(storeId);
 
     while (true) {
@@ -218,7 +220,8 @@ export class DigNetwork {
     skipData: boolean = false
   ): Promise<void> {
     try {
-      const rootHistory = await this.dataStore.getRootHistory();
+      const rootHistory: RootHistoryItem[] =
+        await this.dataStore.getRootHistory();
       if (!rootHistory.length)
         throw new Error(
           "No roots found in rootHistory. Cannot proceed with file download."
@@ -226,72 +229,51 @@ export class DigNetwork {
 
       await this.downloadHeightFile(forceDownload);
 
-      const localManifestPath = path.join(this.storeDir, "manifest.dat");
-      const localManifestHashes = fs.existsSync(localManifestPath)
-        ? fs.readFileSync(localManifestPath, "utf-8").trim().split("\n")
-        : [];
+      const rootHistorySorted = rootHistory
+        .filter((item) => item.timestamp !== undefined)
+        .sort((a, b) => (b.timestamp as number) - (a.timestamp as number));
 
-      const progressBar = renderProgressBar
-        ? new MultiBar(
-            {
-              clearOnComplete: false,
-              hideCursor: true,
-              format: "Syncing Store | {bar} | {percentage}%",
-              noTTYOutput: true,
-            },
-            Presets.shades_classic
-          )
-        : null;
-
-      const progress = progressBar
-        ? progressBar.create(rootHistory.length, 0)
-        : null;
-      const newRootHashes: string[] = [];
-
-      for (let i = 0; i < rootHistory.length; i++) {
-        const { root_hash: rootHash } = rootHistory[i];
-        const datFilePath = path.join(this.storeDir, `${rootHash}.dat`);
-
-        await this.downloadFileFromPeers(
-          `${rootHash}.dat`,
-          datFilePath,
-          forceDownload
+      // Process rootHistory sequentially
+      for (const rootInfo of rootHistorySorted) {
+        const peerIp = await DigNetwork.findPeerWithStoreKey(
+          this.dataStore.StoreId,
+          rootInfo.root_hash
         );
 
-        const datFileContent = JSON.parse(
-          fs.readFileSync(datFilePath, "utf-8")
-        );
-        if (datFileContent.root !== rootHash)
-          throw new Error("Root hash mismatch");
-
-        if (!skipData) {
-          for (const file of Object.keys(datFileContent.files)) {
-            const filePath = getFilePathFromSha256(
-              datFileContent.files[file].sha256,
-              path.join(this.storeDir, "data")
-            );
-            const isInDataDir = filePath.startsWith(
-              path.join(this.storeDir, "data")
-            );
-            await this.downloadFileFromPeers(
-              getFilePathFromSha256(datFileContent.files[file].sha256, "data"),
-              filePath,
-              forceDownload || !isInDataDir
-            );
-          }
+        if (!peerIp) {
+          console.error(
+            `No peer found with root hash ${rootInfo.root_hash}. Skipping download.`
+          );
+          continue; // Skip to the next rootInfo
         }
 
-        if (localManifestHashes[i] !== rootHash) newRootHashes.push(rootHash);
+        const digPeer = new DigPeer(peerIp, this.dataStore.StoreId);
+        const rootResponse = await digPeer.propagationServer.getStoreData(
+          `${rootInfo.root_hash}.dat`
+        );
+        const root = JSON.parse(rootResponse);
 
-        progress?.increment();
+        if (!skipData) {
+          await Promise.all(
+            root.files.map(async (file: any) => {
+              const filePath = getFilePathFromSha256(
+                file.sha256,
+                this.storeDir
+              );
+              if (!fs.existsSync(filePath) || forceDownload) {
+                console.log(`Downloading ${file.sha256}...`);
+                await this.downloadFileFromPeers(
+                  file.sha256.match(/.{1,2}/g)!.join("/"),
+                  filePath,
+                  forceDownload
+                );
+              }
+            })
+          );
+        }
       }
 
-      if (newRootHashes.length)
-        fs.appendFileSync(localManifestPath, newRootHashes.join("\n") + "\n");
-
-      await this.downloadManifestFile(forceDownload);
-
-      progressBar?.stop();
+      await this.downloadManifestFile(true);
 
       console.log("Syncing store complete.");
     } catch (error: any) {
