@@ -241,6 +241,13 @@ export class DigNetwork {
           rootInfo.root_hash
         );
 
+        if (fs.existsSync(`${this.storeDir}/${rootInfo.root_hash}.dat`)) {
+          console.log(
+            `Root hash ${rootInfo.root_hash} already exists locally. Skipping download.`
+          );
+          continue; // Skip to the next rootInfo
+        }
+
         if (!peerIp) {
           console.error(
             `No peer found with root hash ${rootInfo.root_hash}. Skipping download.`
@@ -252,6 +259,8 @@ export class DigNetwork {
         const rootResponse = await digPeer.propagationServer.getStoreData(
           `${rootInfo.root_hash}.dat`
         );
+
+        fs.writeFileSync(`${this.storeDir}/${rootInfo.root_hash}.dat`, rootResponse);
 
         const root = JSON.parse(rootResponse);
 
