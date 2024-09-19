@@ -247,7 +247,12 @@ export class DigNetwork {
         const rootResponse = await digPeer.propagationServer.getStoreData(
           `${rootInfo.root_hash}.dat`
         );
+
+        console.log(rootResponse);
+
         const root = JSON.parse(rootResponse);
+
+        console.log(root)
 
         if (!skipData) {
           await Promise.all(
