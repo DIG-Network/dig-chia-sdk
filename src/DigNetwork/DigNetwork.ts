@@ -7,6 +7,10 @@ import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
 import { RootHistoryItem } from "../types";
+import { promisify } from 'util';
+
+const rename = promisify(fs.rename);
+const unlink = promisify(fs.unlink);
 
 export class DigNetwork {
   private dataStore: DataStore;
@@ -224,7 +228,7 @@ export class DigNetwork {
         );
       }
 
-      await this.downloadHeightFile(forceDownload);
+      await this.downloadHeightFile(true);
 
       const rootHistorySorted = rootHistory
         .filter((item) => item.timestamp !== undefined)
@@ -265,7 +269,7 @@ export class DigNetwork {
                     `Downloading file with sha256: ${file.sha256}...`
                   );
                   await this.downloadFileFromPeers(
-                    file.sha256.match(/.{1,2}/g)!.join("/"),
+                    `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`,
                     filePath,
                     forceDownload
                   );
@@ -314,77 +318,81 @@ export class DigNetwork {
       forceDownload
     );
   }
-
+  
   private async downloadFileFromPeers(
     dataPath: string,
     filePath: string,
     overwrite: boolean
   ): Promise<void> {
     let digPeers = await this.fetchAvailablePeers();
-
+    const tempFilePath = `${filePath}.tmp`;
+  
     while (true) {
       if (!overwrite && fs.existsSync(filePath)) return;
-
+  
       const blacklist = this.peerBlacklist.get(dataPath) || new Set<string>();
-
+  
       for (const digPeer of digPeers) {
         if (blacklist.has(digPeer.IpAddress)) continue;
-
+  
         try {
           // Create directory if it doesn't exist
-          const directory = path.dirname(filePath);
+          const directory = path.dirname(tempFilePath);
           if (!fs.existsSync(directory)) {
             fs.mkdirSync(directory, { recursive: true });
           }
-
-          // Stream the file data directly to the file system
-          const fileStream = fs.createWriteStream(filePath);
-
+  
+          // Stream the file data to a temporary file
+          const fileStream = fs.createWriteStream(tempFilePath);
+  
           // Start streaming the data from the peer
-          const peerStream = await digPeer.propagationServer.streamStoreData(
-            dataPath
-          );
-
-          // Pipe the peer stream directly to the file system
+          const peerStream = await digPeer.propagationServer.streamStoreData(dataPath);
+  
+          // Pipe the peer stream to the temp file
           await new Promise<void>((resolve, reject) => {
             peerStream.pipe(fileStream);
-
-            peerStream.on("end", resolve);
-            peerStream.on("error", reject);
-            fileStream.on("error", reject);
+  
+            peerStream.on('end', resolve);
+            peerStream.on('error', reject);
+            fileStream.on('error', reject);
           });
-
-          if (process.env.DIG_DEBUG === "1") {
+  
+          // Rename the temp file to the final file path after successful download
+          await rename(tempFilePath, filePath);
+  
+          if (process.env.DIG_DEBUG === '1') {
             console.log(`Downloaded ${dataPath} from ${digPeer.IpAddress}`);
           }
-
+  
           return; // Exit the method if download succeeds
         } catch (error) {
           console.warn(
             `Failed to download ${dataPath} from ${digPeer.IpAddress}, blacklisting peer and trying next...`
           );
           blacklist.add(digPeer.IpAddress);
+  
+          // Clean up the temp file in case of failure
+          if (fs.existsSync(tempFilePath)) {
+            await unlink(tempFilePath);
+          }
         }
       }
-
+  
       this.peerBlacklist.set(dataPath, blacklist);
-
+  
       if (blacklist.size >= digPeers.length) {
-        if (process.env.DIG_DEBUG === "1") {
-          console.warn(
-            `All peers blacklisted for ${dataPath}. Refreshing peers...`
-          );
+        if (process.env.DIG_DEBUG === '1') {
+          console.warn(`All peers blacklisted for ${dataPath}. Refreshing peers...`);
         }
-
+  
         digPeers = await this.fetchAvailablePeers();
         if (!digPeers.length) {
-          throw new Error(
-            `Failed to download ${dataPath}: no peers available.`
-          );
+          throw new Error(`Failed to download ${dataPath}: no peers available.`);
         }
       }
     }
   }
+  
 
   private async runProgressBar(
     total: number,
