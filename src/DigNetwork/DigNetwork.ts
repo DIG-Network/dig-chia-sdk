@@ -178,6 +178,8 @@ export class DigNetwork {
           hasRootHash: rootHash,
         });
 
+        console.log(peerIp, storeResponse.headers);
+
         if (
           storeResponse.success &&
           storeResponse.headers?.["x-has-rootHash"] === "true"
