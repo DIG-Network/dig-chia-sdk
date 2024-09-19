@@ -218,10 +218,11 @@ export class DigNetwork {
     try {
       const rootHistory: RootHistoryItem[] =
         await this.dataStore.getRootHistory();
-      if (!rootHistory.length)
+      if (!rootHistory.length) {
         throw new Error(
           "No roots found in rootHistory. Cannot proceed with file download."
         );
+      }
 
       await this.downloadHeightFile(forceDownload);
 
@@ -248,28 +249,29 @@ export class DigNetwork {
           `${rootInfo.root_hash}.dat`
         );
 
-        console.log(rootResponse);
-
         const root = JSON.parse(rootResponse);
 
-        console.log(root)
-
         if (!skipData) {
+          // Use Object.entries() to iterate over the map (root.files)
           await Promise.all(
-            root.files.map(async (file: any) => {
-              const filePath = getFilePathFromSha256(
-                file.sha256,
-                this.storeDir
-              );
-              if (!fs.existsSync(filePath) || forceDownload) {
-                console.log(`Downloading ${file.sha256}...`);
-                await this.downloadFileFromPeers(
-                  file.sha256.match(/.{1,2}/g)!.join("/"),
-                  filePath,
-                  forceDownload
+            Object.entries(root.files).map(
+              async ([storeKey, file]: [string, any]) => {
+                const filePath = getFilePathFromSha256(
+                  file.sha256,
+                  this.storeDir
                 );
+                if (!fs.existsSync(filePath) || forceDownload) {
+                  console.log(
+                    `Downloading file with sha256: ${file.sha256}...`
+                  );
+                  await this.downloadFileFromPeers(
+                    file.sha256.match(/.{1,2}/g)!.join("/"),
+                    filePath,
+                    forceDownload
+                  );
+                }
               }
-            })
+            )
           );
         }
       }
