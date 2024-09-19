@@ -258,7 +258,7 @@ export class DigNetwork {
               async ([storeKey, file]: [string, any]) => {
                 const filePath = getFilePathFromSha256(
                   file.sha256,
-                  this.storeDir
+                  `${this.storeDir}/data`
                 );
                 if (!fs.existsSync(filePath) || forceDownload) {
                   console.log(
