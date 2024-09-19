@@ -79,7 +79,7 @@ export class ContentServer {
     key: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
     const url = `https://${this.ipAddress}/${this.storeId}/${key}`;
-    return this.head(url); // Return the object from head method
+    return this.head(url);
   }
 
   // Method to check if a specific store exists (HEAD request)
@@ -93,7 +93,7 @@ export class ContentServer {
       url += `?hasRootHash=${options.hasRootHash}`;
     }
 
-    return this.head(url); // Return the object from head method
+    return this.head(url);
   }
 
   public streamKey(key: string): Promise<Readable> {

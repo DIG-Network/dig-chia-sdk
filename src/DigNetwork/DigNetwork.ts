@@ -178,7 +178,7 @@ export class DigNetwork {
           hasRootHash: rootHash,
         });
 
-        console.log(peerIp, storeResponse.headers);
+        console.log(peerIp, storeResponse, storeResponse.headers);
 
         if (
           storeResponse.success &&
