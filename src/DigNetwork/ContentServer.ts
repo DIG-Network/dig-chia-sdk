@@ -90,7 +90,7 @@ export class ContentServer {
     let url = `https://${this.ipAddress}/${this.storeId}`;
     
     if (options?.hasRootHash) {
-      url += `hasRootHash=${options.hasRootHash}`;
+      url += `?hasRootHash=${options.hasRootHash}`;
     }
 
     return this.head(url); // Return the object from head method
