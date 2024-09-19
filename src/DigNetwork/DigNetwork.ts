@@ -180,29 +180,23 @@ export class DigNetwork {
 
         console.log(peerIp, storeResponse.headers);
 
-        if (
-          storeResponse.success &&
-          storeResponse.headers?.["x-has-rootHash"] === "true"
-        ) {
-          if (!key) return peerIp;
+        if (storeResponse.headers?.["x-has-roothash"] === "true") {
+          console.log(
+            `Found Peer at ${peerIp} for storeId: ${storeId}, root hash ${rootHash}`
+          );
+
+          if (!key) {
+            return peerIp;
+          }
 
           const keyResponse = await digPeer.contentServer.headKey(key);
-          if (
-            keyResponse.success &&
-            keyResponse.headers?.["x-key-exists"] === "true"
-          ) {
+          if (keyResponse.headers?.["x-key-exists"] === "true") {
             return peerIp;
           }
         }
 
         peerBlackList.push(peerIp);
-      } catch (error) {
-        console.error(
-          "Error while sampling the epoch or contacting peer:",
-          error
-        );
-        break;
-      }
+      } catch {}
     }
 
     return null;
