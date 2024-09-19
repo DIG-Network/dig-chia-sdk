@@ -1,12 +1,11 @@
 import fs from "fs";
 import https from "https";
+import http from 'http';
 import { URL } from "url";
 import { getOrCreateSSLCerts } from "../utils/ssl";
 import { promptCredentials } from "../utils/credentialsUtils";
-import { waitForPromise } from "../utils/spinnerUtils";
 import { Wallet } from "../blockchain";
 import { Readable } from "stream";
-import { getFilePathFromSha256 } from "../utils/hashUtils";
 
 export class PropagationServer {
   private ipAddress: string;
@@ -93,8 +92,13 @@ export class PropagationServer {
   }
 
   // Method to check if a specific store exists (HEAD request)
-  public async headStore(): Promise<boolean> {
-    const url = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}`;
+  public async headStore(options?: { hasRootHash: string }): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
+    let url = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}`;
+
+    if (options?.hasRootHash) {
+      url += `?hasRootHash=${options.hasRootHash}`;
+    }
+
     return this.head(url);
   }
 
@@ -387,34 +391,69 @@ export class PropagationServer {
   }
 
   // Helper method to perform HEAD requests
-  private async head(url: string): Promise<boolean> {
-    return new Promise<boolean>((resolve, reject) => {
-      const urlObj = new URL(url);
-
-      const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || PropagationServer.port,
-        path: urlObj.pathname + urlObj.search,
-        method: "HEAD",
-        key: fs.readFileSync(PropagationServer.keyPath),
-        cert: fs.readFileSync(PropagationServer.certPath),
-        rejectUnauthorized: false,
-      };
-
-      const request = https.request(options, (response) => {
-        if (response.statusCode === 200) {
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      });
-
-      request.on("error", (error) => {
-        console.error(`Request error for ${url}:`, error);
-        reject(false);
-      });
-
-      request.end();
+  private async head(
+    url: string,
+    maxRedirects: number = 5
+  ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Parse the input URL
+        const urlObj = new URL(url);
+  
+        const requestOptions = {
+          hostname: urlObj.hostname,
+          port: urlObj.port || (urlObj.protocol === "https:" ? 443 : undefined),
+          path: urlObj.pathname + urlObj.search,
+          method: "HEAD",
+          key: fs.readFileSync(PropagationServer.keyPath),
+          cert: fs.readFileSync(PropagationServer.certPath),
+          rejectUnauthorized: false,
+        };
+  
+        const request = https.request(requestOptions, (response) => {
+          const { statusCode, headers } = response;
+  
+          // If status code is 2xx, return success
+          if (statusCode && statusCode >= 200 && statusCode < 300) {
+            resolve({ success: true, headers });
+          }
+          // Handle 3xx redirection
+          else if (statusCode && statusCode >= 300 && statusCode < 400 && headers.location) {
+            if (maxRedirects > 0) {
+              let redirectUrl = headers.location;
+  
+              // Check if the redirect URL is relative
+              if (!/^https?:\/\//i.test(redirectUrl)) {
+                // Resolve the relative URL based on the original URL
+                redirectUrl = new URL(redirectUrl, url).toString();
+                console.log(`Resolved relative redirect to: ${redirectUrl}`);
+              } else {
+                console.log(`Redirecting to: ${redirectUrl}`);
+              }
+  
+              // Recursively follow the redirection
+              this.head(redirectUrl, maxRedirects - 1)
+                .then(resolve)
+                .catch(reject);
+            } else {
+              reject({ success: false, message: "Too many redirects" });
+            }
+          } else {
+            // For other status codes, consider it a failure
+            resolve({ success: false });
+          }
+        });
+  
+        request.on("error", (error) => {
+          console.error(`Request error for ${url}:`, error);
+          reject({ success: false });
+        });
+  
+        request.end();
+      } catch (err) {
+        console.error(`Invalid URL: ${url}`, err);
+        reject({ success: false, message: "Invalid URL" });
+      }
     });
   }
 
