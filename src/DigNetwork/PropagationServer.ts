@@ -125,7 +125,10 @@ export class PropagationServer {
       password = credentials.password;
     }
 
-    const uploadDetails = await this.fetchUploadDetails(username, password);
+    const wallet = await Wallet.load("default");
+    const publicKey = await wallet.getPublicSyntheticKey();
+
+    const uploadDetails = await this.fetchUploadDetails(username, password, publicKey.toString("hex"));
     if (!uploadDetails) {
       throw new Error("Failed to retrieve upload details.");
     }
@@ -177,7 +180,8 @@ export class PropagationServer {
   // Method to fetch upload details from the server
   private async fetchUploadDetails(
     username: string,
-    password: string
+    password: string,
+    publicKey: string
   ): Promise<
     { nonce: string; lastUploadedHash: string; generationIndex: number } | false
   > {
@@ -198,6 +202,7 @@ export class PropagationServer {
           Authorization: `Basic ${Buffer.from(
             `${username}:${password}`
           ).toString("base64")}`,
+          'X-Public-Key': publicKey,
         },
         key: fs.readFileSync(PropagationServer.keyPath),
         cert: fs.readFileSync(PropagationServer.certPath),
