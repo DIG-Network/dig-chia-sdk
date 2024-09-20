@@ -29,6 +29,7 @@ export interface DigConfig {
 export interface RootHistoryItem {
   root_hash: string;
   timestamp: Number | undefined;
+  synced: boolean;
 }
 
 export interface DatFile {

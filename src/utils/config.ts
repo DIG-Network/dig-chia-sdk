@@ -20,8 +20,7 @@ export const STORE_PATH = path.join(DIG_FOLDER_PATH, "stores");
 export const USER_DIR_PATH = path.join(os.homedir(), ".dig");
 export const CONFIG_FILE_PATH = path.join(DIG_FOLDER_PATH, "dig.config.json");
 
-export const getManifestFilePath = (storeId: string): string =>
-  path.join(STORE_PATH, storeId, "manifest.dat");
+
 
 export const getHeightFilePath = (storeId: string): string =>
   path.join(STORE_PATH, storeId, "height.json");

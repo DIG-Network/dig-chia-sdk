@@ -20,7 +20,6 @@ import { Wallet } from "./Wallet";
 import {
   MIN_HEIGHT,
   MIN_HEIGHT_HEADER_HASH,
-  getManifestFilePath,
   getActiveStoreId,
   STORE_PATH,
 } from "../utils/config";
@@ -465,108 +464,8 @@ export class DataStore {
     return rootHashes.map((rootHash, index) => ({
       root_hash: rootHash.toString("hex"),
       timestamp: Number(rootHashesTimestamps?.[index].toString()),
+      synced: fs.existsSync(`${STORE_PATH}/${this.storeId}/${rootHash}.dat`),
     }));
-  }
-
-  public async getLocalRootHistory(): Promise<RootHistoryItem[] | undefined> {
-    const manifestFilePath = getManifestFilePath(this.storeId);
-    if (!fs.existsSync(manifestFilePath)) {
-      console.error("Manifest file not found", manifestFilePath);
-      return undefined;
-    }
-
-    const manifestHashes = fs
-      .readFileSync(manifestFilePath, "utf-8")
-      .split("\n")
-      .filter(Boolean);
-    return manifestHashes.map((rootHash) => ({
-      root_hash: rootHash,
-      timestamp: 0, // Timestamps are not yet included in the manifest
-    }));
-  }
-
-  public async validate(): Promise<boolean> {
-    const rootHistory = await this.getRootHistory();
-    const manifestFilePath = getManifestFilePath(this.storeId);
-
-    if (!fs.existsSync(manifestFilePath)) {
-      console.error("Manifest file not found", manifestFilePath);
-      return false;
-    }
-
-    const manifestHashes = fs
-      .readFileSync(manifestFilePath, "utf-8")
-      .split("\n")
-      .filter(Boolean);
-
-    if (manifestHashes.length > rootHistory.length) {
-      console.error(
-        "The store is corrupted: Manifest file has more hashes than the root history."
-      );
-      return false;
-    }
-
-    if (rootHistory.length > manifestHashes.length) {
-      console.error(
-        "The store is not synced: Root history has more hashes than the manifest file."
-      );
-      return false;
-    }
-
-    for (let i = 0; i < manifestHashes.length; i++) {
-      if (manifestHashes[i] !== rootHistory[i]?.root_hash) {
-        console.error(
-          `Root hash mismatch at position ${i}: expected ${manifestHashes[i]} but found ${rootHistory[i]?.root_hash}`
-        );
-        return false;
-      }
-    }
-
-    let filesIntegrityIntact = true;
-
-    // At this point we have verified that the root history and manifest file match
-    for (const rootHash of manifestHashes) {
-      const datFilePath = path.join(
-        STORE_PATH,
-        this.storeId,
-        `${rootHash}.dat`
-      );
-
-      if (!fs.existsSync(datFilePath)) {
-        console.error(`Data file for root hash ${rootHash} not found`);
-        return false;
-      }
-
-      const datFileContent = JSON.parse(
-        fs.readFileSync(datFilePath, "utf-8")
-      ) as DatFile;
-      if (datFileContent.root !== rootHash) {
-        console.error(
-          `Root hash in data file does not match: ${datFileContent.root} !== ${rootHash}`
-        );
-        return false;
-      }
-
-      for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {
-        // We are going to check if the sha256 belongs to the tree, and then we are going to make sure
-        // that the file is in the data folder and that the sha256 of the file matches the one in the dat file
-        const belongsInTree = await this.Tree.verifyKeyIntegrity(fileData.sha256, rootHash);
-        const fileIntegrityCheck = validateFileSha256(
-          fileData.sha256,
-          path.join(STORE_PATH, this.storeId, "data")
-        );
-        if (!fileIntegrityCheck || !belongsInTree) {
-          filesIntegrityIntact = false;
-        }
-      }
-    }
-
-    if (!filesIntegrityIntact) {
-      console.error("Store Corrupted: Data failed SHA256 validation.");
-      return false;
-    }
-
-    return true;
   }
 
   public async getMetaData(): Promise<DataStoreMetadata> {
@@ -575,19 +474,9 @@ export class DataStore {
   }
 
   public async isSynced(): Promise<boolean> {
-    const rootHistory = await this.getRootHistory();
-    const manifestFilePath = getManifestFilePath(this.storeId);
-
-    if (!fs.existsSync(manifestFilePath)) {
-      return false;
-    }
-
-    const manifestHashes = fs
-      .readFileSync(manifestFilePath, "utf-8")
-      .split("\n")
-      .filter(Boolean);
-
-    return rootHistory.length === manifestHashes.length;
+    const dataStore = await DataStore.from(this.storeId);
+    const rootHistory = await dataStore.getRootHistory();
+    return !rootHistory.some((root) => !root.synced);
   }
 
   public async hasMetaWritePermissions(
@@ -690,16 +579,5 @@ export class DataStore {
     }
 
     return filesInvolved;
-  }
-
-  public getManifestHashes(): string[] {
-    const manifestFilePath = path.join(
-      STORE_PATH,
-      this.storeId,
-      "manifest.dat"
-    );
-    return fs.existsSync(manifestFilePath)
-      ? fs.readFileSync(manifestFilePath, "utf-8").split("\n").filter(Boolean)
-      : [];
   }
 }
