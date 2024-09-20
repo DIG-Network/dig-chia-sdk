@@ -382,7 +382,7 @@ export class PropagationServer {
       });
 
       request.on("error", (error) => {
-        console.error(`Request error for ${url}:`, error);
+        console.error(`GET Request error for ${url}:`, error);
         reject(error);
       });
 
@@ -445,13 +445,13 @@ export class PropagationServer {
         });
   
         request.on("error", (error) => {
-          console.error(`Request error for ${url}:`, error);
+          console.error(`HEAD ${url}:`, error.message);
           reject({ success: false });
         });
   
         request.end();
-      } catch (err) {
-        console.error(`Invalid URL: ${url}`, err);
+      } catch (err: any) {
+        console.error(`Invalid URL: ${url}`, err.message);
         reject({ success: false, message: "Invalid URL" });
       }
     });
@@ -564,7 +564,7 @@ export class PropagationServer {
       });
 
       request.on("error", (error) => {
-        console.error(`Request error for ${url}:`, error);
+        console.error(`GET ${url}:`, error.message);
         reject(error);
       });
 

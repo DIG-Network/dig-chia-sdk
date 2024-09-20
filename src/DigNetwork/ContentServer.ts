@@ -25,7 +25,7 @@ export class ContentServer {
   // Method to get the content of a specified key from the peer, with optional challenge query
   public async getKey(key: string, rootHash: string, challengeHex?: string): Promise<string> {
     // Construct the base URL
-    let url = `http://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
+    let url = `https://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
 
     // If a challenge is provided, append it as a query parameter
     if (challengeHex) {
@@ -52,25 +52,25 @@ export class ContentServer {
 
   // Method to get the .well-known information
   public async getWellKnown(): Promise<any> {
-    const url = `http://${this.ipAddress}:${ContentServer.port}/.well-known`;
+    const url = `https://${this.ipAddress}:${ContentServer.port}/.well-known`;
     return this.fetchJson(url);
   }
 
   // Method to get the list of known stores
   public async getKnownStores(): Promise<any> {
-    const url = `http://${this.ipAddress}:${ContentServer.port}/.well-known/stores`;
+    const url = `https://${this.ipAddress}:${ContentServer.port}/.well-known/stores`;
     return this.fetchJson(url);
   }
 
   // Method to get the index of all stores
   public async getStoresIndex(): Promise<any> {
-    const url = `http://${this.ipAddress}:${ContentServer.port}/`;
+    const url = `https://${this.ipAddress}:${ContentServer.port}/`;
     return this.fetchJson(url);
   }
 
   // Method to get the index of keys in a store
   public async getKeysIndex(): Promise<any> {
-    const url = `http://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
+    const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
     return this.fetchJson(url);
   }
 
@@ -78,7 +78,7 @@ export class ContentServer {
   public async headKey(
     key: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
-    const url = `http://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
+    const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
     return this.head(url);
   }
 
@@ -87,7 +87,7 @@ export class ContentServer {
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
-    let url = `http://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
+    let url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
     
     if (options?.hasRootHash) {
       url += `?hasRootHash=${options.hasRootHash}`;
@@ -98,7 +98,7 @@ export class ContentServer {
 
   public streamKey(key: string): Promise<Readable> {
     return new Promise((resolve, reject) => {
-      const url = `http://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
+      const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
       const urlObj = new URL(url);
 
       const requestOptions = {
@@ -129,7 +129,7 @@ export class ContentServer {
       });
 
       request.on("error", (error) => {
-        console.error(`Request error for ${url}:`, error);
+        console.error(`GET Request error for ${url}:`, error);
         reject(error);
       });
 
@@ -199,7 +199,7 @@ export class ContentServer {
         });
 
         request.on("error", (error) => {
-          console.error(`Request error for ${url}:`, error);
+          console.error(`HEAD ${url}:`, error.message);
           reject({ success: false });
         });
 
@@ -302,7 +302,7 @@ export class ContentServer {
       });
 
       request.on("error", (error) => {
-        console.error(`Request error for ${url}:`, error);
+        console.error(`GET ${url}:`, error.message);
         reject(error);
       });
 
