@@ -58,149 +58,6 @@ export class DigPeer {
     return this.ipAddress;
   }
 
-  public async validateStore(
-    rootHash: string,
-    keys: string[]
-  ): Promise<boolean> {
-    console.log(
-      `Validating store ${this.storeId} on peer ${this.ipAddress}...`
-    );
-
-    try {
-      const dataStore = DataStore.from(this.storeId);
-      // Fetch the root history from the propagation server
-      const rootHistory = await dataStore.getRootHistory();
-
-      if (rootHistory.length === 0) {
-        console.error("No root history found for the store.");
-        return false;
-      }
-
-      // Fetch the manifest.dat file content from the propagation server
-      const manifestContent = await this.propagationServer.getStoreData(
-        "manifest.dat"
-      );
-      const manifestHashes: string[] = manifestContent
-        .split("\n")
-        .filter(Boolean);
-
-      // Ensure all hashes in root history are present in the manifest in the same order
-      for (let i = 0; i < rootHistory.length; i++) {
-        if (rootHistory[i].root_hash !== manifestHashes[i]) {
-          console.error(
-            `Hash mismatch at index ${i}: manifest hash ${manifestHashes[i]} does not match root history hash ${rootHistory[i].root_hash}`
-          );
-          return false;
-        }
-      }
-
-      console.log("Manifest file validated.");
-
-      // Fetch the .dat file content for the specified root hash from the content server
-      const datFileContent = JSON.parse(
-        await this.propagationServer.getStoreData(`${rootHash}.dat`)
-      );
-
-      if (datFileContent.root !== rootHash) {
-        console.error(
-          `Root hash in .dat file does not match: ${datFileContent.root} !== ${rootHash}`
-        );
-        return false;
-      }
-
-      let filesIntegrityIntact = true;
-
-      // Validate SHA256 hashes of the specified keys using streamStoreKey
-      for (const key of keys) {
-        const fileData = datFileContent.files[key];
-        if (!fileData) {
-          console.error(`File key ${key} not found in .dat file.`);
-          filesIntegrityIntact = false;
-          continue;
-        }
-
-        // Stream the file from the propagation server and calculate the SHA256 hash on the fly
-        const hash = crypto.createHash("sha256");
-        const fileStream: Readable = await this.contentServer.streamKey(
-          Buffer.from(key, "hex").toString("utf-8")
-        );
-
-        await new Promise<void>((resolve, reject) => {
-          fileStream.on("data", (chunk) => {
-            hash.update(chunk); // Update the hash with each chunk of data
-          });
-
-          fileStream.on("end", () => {
-            const calculatedHash = hash.digest("hex");
-            // Compare the calculated hash with the expected hash
-            if (calculatedHash !== fileData.sha256) {
-              console.error(`File ${key} failed SHA256 validation.`);
-              filesIntegrityIntact = false;
-            }
-            resolve();
-          });
-
-          fileStream.on("error", (err) => {
-            console.error(`Failed to stream file ${key}: ${err.message}`);
-            reject(err);
-          });
-        });
-
-        // Perform tree integrity validation using the datFileContent and the root hash
-        const treeCheck = DataIntegrityTree.validateKeyIntegrityWithForeignTree(
-          key,
-          fileData.sha256,
-          datFileContent,
-          rootHash,
-          path.resolve(DIG_FOLDER_PATH, "stores", this.storeId, 'data')
-        );
-
-        if (!treeCheck) {
-          console.error(`Tree validation failed for file ${key}.`);
-          filesIntegrityIntact = false;
-        }
-      }
-
-      if (!filesIntegrityIntact) {
-        console.error("Store Corrupted: Data failed SHA256 validation.");
-        return false;
-      }
-
-      console.log("Store validation successful.");
-      return true;
-    } catch (error: any) {
-      console.error(`Failed to validate store: ${error.message}`);
-      return false;
-    }
-  }
-
-  public async isSynced(): Promise<boolean> {
-    try {
-      // Fetch the root history from the propagation server
-      const dataStore = DataStore.from(this.storeId);
-      const rootHistory = await dataStore.getRootHistory();
-
-      if (rootHistory.length === 0) {
-        console.error("No root history found for the store.");
-        return false;
-      }
-
-      // Fetch the manifest.dat file content from the content server
-      const manifestContent = await this.propagationServer.getStoreData(
-        "manifest.dat"
-      );
-      const manifestHashes: string[] = manifestContent
-        .split("\n")
-        .filter(Boolean);
-
-      // Compare lengths of root history and manifest
-      return rootHistory.length === manifestHashes.length;
-    } catch (error: any) {
-      console.error(`Failed to check sync status: ${error.message}`);
-      return false;
-    }
-  }
-
   public static sendEqualBulkPayments(
     walletName: string,
     addresses: string[],
@@ -307,6 +164,41 @@ export class DigPeer {
 
     // Return the 32-byte hash as a hex string
     return transformedBuffer;
+  }
+
+  public async syncStore(): Promise<void> {
+    const dataStore = DataStore.from(this.storeId);
+    const rootHistory = await dataStore.getRootHistory();
+    rootHistory
+      .filter((root) => root.synced)
+      .forEach((item) => {
+        this.pushStoreRoot(this.storeId, item.root_hash);
+      });
+  }
+
+  public async pushStoreRoot(storeId: string, rootHash: string): Promise<void> {
+    const dataStore = DataStore.from(storeId);
+
+    const alreadySynced = await this.contentServer.hasRootHash(rootHash);
+
+    if (alreadySynced) {
+      console.log(`Root hash ${rootHash} already synced.`);
+      return;
+    }
+
+    const tree = await dataStore.Tree.serialize(rootHash);
+
+    // @ts-ignore
+    tree.files.forEach(async (file) => {
+      await dataStore.Tree.verifyKeyIntegrity(file.sha256, rootHash);
+      console.log(`Pushing file ${file.key} to ${this.IpAddress}`);
+      const dataPath = path.join(
+        "data",
+        file.sha256.match(/.{1,2}/g)!.join("/")
+      );
+      const fileLocation = path.join(STORE_PATH, storeId, dataPath);
+      await this.propagationServer.pushFile(fileLocation, dataPath);
+    });
   }
 
   public async downloadData(storeId: string, dataPath: string): Promise<void> {

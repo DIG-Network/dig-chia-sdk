@@ -23,7 +23,11 @@ export class ContentServer {
   }
 
   // Method to get the content of a specified key from the peer, with optional challenge query
-  public async getKey(key: string, rootHash: string, challengeHex?: string): Promise<string> {
+  public async getKey(
+    key: string,
+    rootHash: string,
+    challengeHex?: string
+  ): Promise<string> {
     // Construct the base URL
     let url = `https://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
 
@@ -83,17 +87,27 @@ export class ContentServer {
   }
 
   // Method to check if a specific store exists (HEAD request)
-  public async headStore(options?: { hasRootHash: string}): Promise<{
+  public async headStore(options?: { hasRootHash: string }): Promise<{
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
     let url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
-    
+
     if (options?.hasRootHash) {
       url += `?hasRootHash=${options.hasRootHash}`;
     }
 
     return this.head(url);
+  }
+
+  public async hasRootHash(rootHash: string): Promise<boolean> {
+    const { success, headers } = await this.headStore({
+      hasRootHash: rootHash,
+    });
+    if (success) {
+      return headers?.["x-has-root-hash"] === "true";
+    }
+    return false;
   }
 
   public streamKey(key: string): Promise<Readable> {
@@ -285,7 +299,7 @@ export class ContentServer {
             const redirectUrl = new URL(response.headers.location, url); // Resolve relative URLs based on the original URL
 
             // Recursively follow the redirect, passing the same query params
-           // console.log(`Redirecting to: ${redirectUrl.toString()}`);
+            // console.log(`Redirecting to: ${redirectUrl.toString()}`);
             this.fetch(redirectUrl.toString(), maxRedirects - 1)
               .then(resolve)
               .catch(reject);

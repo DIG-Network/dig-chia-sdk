@@ -2,7 +2,6 @@ import * as fs from "fs";
 import * as path from "path";
 import { MultiBar, Presets } from "cli-progress";
 import { DigPeer } from "./DigPeer";
-import { getDeltaFiles } from "../utils/deltaUtils";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
@@ -24,135 +23,6 @@ export class DigNetwork {
     this.serverCoin = new ServerCoin(storeId);
     this.storeDir = path.resolve(DIG_FOLDER_PATH, "stores", storeId);
     this.peerBlacklist = new Map<string, Set<string>>(); // Initialize empty map for blacklists
-  }
-
-  private async uploadPreflight(
-    digPeer: DigPeer
-  ): Promise<{ generationIndex: number; lastLocalRootHash: string }> {
-    // Preflight check is handled internally by PropagationServer if needed
-    const { lastUploadedHash, generationIndex } =
-      await digPeer.propagationServer.getUploadDetails();
-
-    const rootHistory = await this.dataStore.getLocalRootHistory();
-
-    if (!rootHistory || rootHistory.length === 0) {
-      throw new Error(
-        "No root hashes found. Please commit your changes first."
-      );
-    }
-
-    const lastLocalRootHash = rootHistory[rootHistory.length - 1].root_hash;
-    const localGenerationIndex = rootHistory.length - 1;
-
-    // Handle conditions based on the upload details
-    if (
-      lastUploadedHash !== lastLocalRootHash &&
-      generationIndex === localGenerationIndex
-    ) {
-      throw new Error(
-        "The repository seems to be corrupted. Please pull the latest changes before pushing."
-      );
-    }
-
-    if (
-      lastUploadedHash === lastLocalRootHash &&
-      generationIndex === localGenerationIndex
-    ) {
-      throw new Error("No changes detected. Skipping push.");
-    }
-
-    if (
-      lastUploadedHash !== lastLocalRootHash &&
-      generationIndex > localGenerationIndex
-    ) {
-      throw new Error(
-        "Remote repository is ahead of the local repository. Please pull the latest changes before pushing."
-      );
-    }
-    return { generationIndex, lastLocalRootHash };
-  }
-
-  public async uploadStoreHead(digPeer: DigPeer): Promise<void> {
-    // First make sure that the remote store is up to date.
-    const rootHistory = await this.dataStore.getRootHistory();
-    const localManifestHashes = await this.dataStore.getManifestHashes();
-    const remoteManifestFile = await digPeer.propagationServer.getStoreData(
-      "manifest.dat"
-    );
-
-    const remoteManifestHashes = remoteManifestFile.split("\n").filter(Boolean);
-    const onChainRootHashes = rootHistory.map((root) => root.root_hash);
-
-    // Check that remote manifest is one behind on-chain root hashes
-    if (remoteManifestHashes.length !== onChainRootHashes.length - 1) {
-      throw new Error(
-        "Remote manifest should be one behind the on-chain root. Cannot push head."
-      );
-    }
-
-    // Compare each remote manifest hash with the corresponding on-chain root hash
-    for (let i = 0; i < remoteManifestHashes.length; i++) {
-      if (remoteManifestHashes[i] !== onChainRootHashes[i]) {
-        throw new Error(
-          `Remote manifest does not match on-chain root at index ${i}. Cannot push head.`
-        );
-      }
-    }
-
-    // Get the files for the latest local manifest hash
-    const filesToUpload = await this.dataStore.getFileSetForRootHash(
-      localManifestHashes[localManifestHashes.length - 1]
-    );
-
-    if (!filesToUpload.length) {
-      console.log("No files to upload.");
-      return;
-    }
-
-    // Upload files to the remote peer with a progress bar
-    await this.runProgressBar(
-      filesToUpload.length,
-      "Store Data",
-      async (progress) => {
-        for (const filePath of filesToUpload) {
-          const relativePath = path
-            .relative(this.storeDir, filePath)
-            .replace(/\\/g, "/");
-          await digPeer.propagationServer.pushFile(filePath, relativePath);
-          progress.increment();
-        }
-      }
-    );
-  }
-
-  // Uploads the store to a specific peer
-  public async uploadStore(digPeer: DigPeer): Promise<void> {
-    const { generationIndex } = await this.uploadPreflight(digPeer);
-
-    const filesToUpload = await getDeltaFiles(
-      this.dataStore.StoreId,
-      generationIndex,
-      path.resolve(DIG_FOLDER_PATH, "stores")
-    );
-
-    if (!filesToUpload.length) {
-      console.log("No files to upload.");
-      return;
-    }
-
-    await this.runProgressBar(
-      filesToUpload.length,
-      "Store Data",
-      async (progress) => {
-        for (const filePath of filesToUpload) {
-          const relativePath = path
-            .relative(this.storeDir, filePath)
-            .replace(/\\/g, "/");
-          await digPeer.propagationServer.pushFile(filePath, relativePath);
-          progress.increment();
-        }
-      }
-    );
   }
 
   public static async subscribeToStore(storeId: string): Promise<void> {
@@ -232,10 +102,7 @@ export class DigNetwork {
     fs.unlinkSync(path.join(DIG_FOLDER_PATH, "stores", storeId + ".json"));
   }
 
-  // Downloads files from the network based on the manifest
   public async downloadFiles(
-    forceDownload: boolean = false,
-    renderProgressBar: boolean = true,
     skipData: boolean = false
   ): Promise<void> {
     console.log("Starting file download process...");
@@ -369,8 +236,6 @@ export class DigNetwork {
         break;
       }
 
-      await this.downloadManifestFile(true);
-
       console.log("Syncing store complete.");
     } catch (error: any) {
       if (selectedPeer) {
@@ -403,15 +268,6 @@ export class DigNetwork {
     );
   }
 
-  private async downloadManifestFile(forceDownload: boolean): Promise<void> {
-    const heightFilePath = path.join(this.storeDir, "manifest.dat");
-    await this.downloadFileFromPeers(
-      "manifest.dat",
-      heightFilePath,
-      forceDownload
-    );
-  }
-
   private async downloadFileFromPeers(
     dataPath: string,
     filePath: string,
@@ -429,70 +285,20 @@ export class DigNetwork {
         try {
           if (blacklist.has(digPeer.IpAddress)) continue;
 
-          const response = await digPeer.propagationServer.headStore();
-
-          if (!response.success) {
-            continue;
-          }
-
-          // Create directory if it doesn't exist
-          const directory = path.dirname(tempFilePath);
-          if (!fs.existsSync(directory)) {
-            fs.mkdirSync(directory, { recursive: true });
-          }
-
-          // Stream the file data to a temporary file
-          const fileStream = fs.createWriteStream(tempFilePath);
-
-          // Start streaming the data from the peer
-          const peerStream = await digPeer.propagationServer.streamStoreData(
-            dataPath
-          );
-
-          // Pipe the peer stream to the temp file
-          await new Promise<void>((resolve, reject) => {
-            peerStream.pipe(fileStream);
-
-            peerStream.on("end", resolve);
-            peerStream.on("error", reject);
-            fileStream.on("error", reject);
-          });
-
-          // Rename the temp file to the final file path after successful download
-          await rename(tempFilePath, filePath);
-
-          if (process.env.DIG_DEBUG === "1") {
-            console.log(`Downloaded ${dataPath} from ${digPeer.IpAddress}`);
-          }
+          await digPeer.downloadData(this.dataStore.StoreId, dataPath);
 
           return; // Exit the method if download succeeds
         } catch (error) {
           console.warn(
             `Failed to download ${dataPath} from ${digPeer.IpAddress}, blacklisting peer and trying next...`
           );
+
           blacklist.add(digPeer.IpAddress);
 
           // Clean up the temp file in case of failure
           if (fs.existsSync(tempFilePath)) {
             await unlink(tempFilePath);
           }
-        }
-      }
-
-      this.peerBlacklist.set(dataPath, blacklist);
-
-      if (blacklist.size >= digPeers.length) {
-        if (process.env.DIG_DEBUG === "1") {
-          console.warn(
-            `All peers blacklisted for ${dataPath}. Refreshing peers...`
-          );
-        }
-
-        digPeers = await this.fetchAvailablePeers();
-        if (!digPeers.length) {
-          throw new Error(
-            `Failed to download ${dataPath}: no peers available.`
-          );
         }
       }
     }

@@ -30,17 +30,17 @@ export class PropagationServer {
   }
 
   // Method to upload a file to the propagation server
-  public async pushFile(filePath: string, relativePath: string): Promise<void> {
+  public async pushFile(fileLocation: string, dataPath: string): Promise<void> {
     const { nonce, username, password } = await this.getUploadDetails();
     const wallet = await Wallet.load("default");
     const keyOwnershipSig = await wallet.createKeyOwnershipSignature(nonce);
     const publicKey = await wallet.getPublicSyntheticKey();
 
-    const uploadUrl = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}/${relativePath}`;
+    const uploadUrl = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}/${dataPath}`;
     await this.retryOperation(
       () =>
         this.uploadFileDirect(
-          filePath,
+          fileLocation,
           uploadUrl,
           username,
           password,
@@ -48,7 +48,7 @@ export class PropagationServer {
           publicKey.toString("hex"),
           nonce
         ),
-      `Upload failed for ${relativePath}`
+      `Upload failed for ${dataPath}`
     );
   }
 
