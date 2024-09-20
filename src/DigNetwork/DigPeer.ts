@@ -169,14 +169,15 @@ export class DigPeer {
   public async syncStore(): Promise<void> {
     const dataStore = DataStore.from(this.storeId);
     const rootHistory = await dataStore.getRootHistory();
-    rootHistory
-      .filter((root) => root.synced)
-      .forEach((item) => {
-        this.pushStoreRoot(this.storeId, item.root_hash);
-      });
-  }
+
+    for (const item of rootHistory.filter((root) => root.synced)) {
+        await this.pushStoreRoot(this.storeId, item.root_hash);
+    }
+}
+
 
   public async pushStoreRoot(storeId: string, rootHash: string): Promise<void> {
+    console.log(`Pushing root hash ${rootHash} to ${this.IpAddress}`);
     const dataStore = DataStore.from(storeId);
 
     const alreadySynced = await this.contentServer.hasRootHash(rootHash);
@@ -187,6 +188,9 @@ export class DigPeer {
     }
 
     const tree = await dataStore.Tree.serialize(rootHash);
+
+    // @ts-ignore
+    console.log(tree.files);
 
     // @ts-ignore
     tree.files.forEach(async (file) => {
