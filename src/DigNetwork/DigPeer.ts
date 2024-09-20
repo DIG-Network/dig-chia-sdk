@@ -6,6 +6,7 @@ import { PropagationServer } from "./PropagationServer";
 import { IncentiveServer } from "./IncentiveServer";
 import { DataStore } from "../blockchain";
 import { DataIntegrityTree } from "../DataIntegrityTree";
+import { DIG_FOLDER_PATH } from "../utils/config";
 import fs from "fs";
 import {
   sendXch,
@@ -150,7 +151,8 @@ export class DigPeer {
           key,
           fileData.sha256,
           datFileContent,
-          rootHash
+          rootHash,
+          path.resolve(DIG_FOLDER_PATH, "stores", this.storeId, 'data')
         );
 
         if (!treeCheck) {

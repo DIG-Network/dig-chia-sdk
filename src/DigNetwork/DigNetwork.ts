@@ -8,6 +8,7 @@ import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
 import { RootHistoryItem } from "../types";
 import { promisify } from "util";
+import { DataIntegrityTree } from "../DataIntegrityTree";
 
 const rename = promisify(fs.rename);
 const unlink = promisify(fs.unlink);
@@ -213,7 +214,7 @@ export class DigNetwork {
         // Add peer to blacklist if it doesn't meet criteria
         peerBlackList.push(peerIp);
       } catch (error) {
-        console.error(`Error connecting to peer ${peerIp}. Resampling...`);
+        console.error(`Error connecting to DIG Peer ${peerIp}. Resampling...`);
         if (peerIp) {
           peerBlackList.push(peerIp); // Add to blacklist if error occurs
         }
@@ -312,10 +313,33 @@ export class DigNetwork {
                   console.log(
                     `Downloading file with sha256: ${file.sha256}...`
                   );
+
                   await selectedPeer.downloadData(
                     this.dataStore.StoreId,
                     `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`
                   );
+
+                  const integrityCheck =
+                    await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
+                      storeKey,
+                      file.sha256,
+                      root,
+                      rootInfo.root_hash,
+                      `${this.storeDir}/data`
+                    );
+
+                  if (integrityCheck) {
+                    console.log(
+                      `\x1b[32mIntegrity check passed for file with sha256: ${file.sha256}.\x1b[0m`
+                    );
+                    continue;
+                  }
+
+                  console.error(
+                    `\x1b[31mIntegrity check failed for file with sha256: ${file.sha256}.\x1b[0m`
+                  );
+                  await unlink(filePath);
+                  throw new Error(`Store Integrity check failed. Syncing file from another peer.`);
                 }
               }
             }
@@ -348,6 +372,8 @@ export class DigNetwork {
       if (selectedPeer) {
         peerBlackList.push(selectedPeer.IpAddress);
       }
+
+      console.trace(error);
       throw error;
     }
   }
@@ -396,15 +422,15 @@ export class DigNetwork {
       const blacklist = this.peerBlacklist.get(dataPath) || new Set<string>();
 
       for (const digPeer of digPeers) {
-        if (blacklist.has(digPeer.IpAddress)) continue;
-
-        const response = await digPeer.propagationServer.headStore();
-
-        if (!response.success) {
-          continue;
-        }
-
         try {
+          if (blacklist.has(digPeer.IpAddress)) continue;
+
+          const response = await digPeer.propagationServer.headStore();
+
+          if (!response.success) {
+            continue;
+          }
+
           // Create directory if it doesn't exist
           const directory = path.dirname(tempFilePath);
           if (!fs.existsSync(directory)) {

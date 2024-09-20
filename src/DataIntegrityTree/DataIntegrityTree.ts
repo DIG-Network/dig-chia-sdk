@@ -775,13 +775,14 @@ class DataIntegrityTree {
    * @param expectedRootHash - The expected root hash of the Merkle tree.
    * @returns A boolean indicating if the SHA-256 is present in the foreign tree and the root hash matches.
    */
-  static validateKeyIntegrityWithForeignTree(
-    key: string,
+  static async validateKeyIntegrityWithForeignTree(
+    hexkey: string,
     sha256: string,
     serializedTree: object,
-    expectedRootHash: string
-  ): boolean {
-    if (!isHexString(key)) {
+    expectedRootHash: string,
+    dataDir: string
+  ): Promise<boolean> {
+    if (!isHexString(hexkey)) {
       throw new Error("key must be a valid hex string");
     }
     if (!isHexString(sha256)) {
@@ -791,42 +792,83 @@ class DataIntegrityTree {
       throw new Error("expectedRootHash must be a valid hex string");
     }
 
-    // Deserialize the foreign tree
-    const leaves = (serializedTree as any).leaves.map((leaf: string) =>
-      Buffer.from(leaf, "hex")
-    );
-    const tree = new MerkleTree(leaves, SHA256, { sortPairs: true });
+    // File path based on sha256
+    const filePath = path.join(dataDir, sha256.match(/.{1,2}/g)!.join("/"));
 
-    // Verify that the deserialized tree's root matches the expected root hash
-    const treeRootHash = tree.getRoot().toString("hex");
-    if (treeRootHash !== expectedRootHash) {
-      console.warn(
-        `Expected root hash ${expectedRootHash}, but got ${treeRootHash}`
-      );
-      return false;
+    // Check if the file exists
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`File at path ${filePath} does not exist`);
     }
 
-    // Rebuild the files map from the serialized tree
-    // @ts-ignore
-    tree.files = new Map(
-      Object.entries((serializedTree as any).files).map(
-        ([key, value]: [string, any]) => [
-          key,
-          { hash: value.hash, sha256: value.sha256 },
-        ]
-      )
-    );
+    const compressedReadStream = fs.createReadStream(filePath);
+    const decompressStream = zlib.createGunzip();
+    const hash = crypto.createHash("sha256");
 
-    // Check if the SHA-256 exists in the foreign tree's files
-    const combinedHash = crypto
-      .createHash("sha256")
-      .update(`${toHex(key)}/${sha256}`)
-      .digest("hex");
+    // Process file decompression and hash comparison
+    return new Promise((resolve, reject) => {
+      compressedReadStream.pipe(decompressStream);
 
-    const leaf = Buffer.from(combinedHash, "hex");
-    const isInTree = tree.getLeafIndex(leaf) !== -1;
+      decompressStream.on("data", (chunk) => {
+        hash.update(chunk);
+      });
 
-    return isInTree;
+      decompressStream.on("end", () => {
+        const uncompressedSha256 = hash.digest("hex");
+        console.log(`SHA-256 of uncompressed file: ${uncompressedSha256}`);
+
+        if (uncompressedSha256 !== sha256) {
+          console.warn(
+            `File hash mismatch. Expected: ${sha256}, got: ${uncompressedSha256}`
+          );
+          return resolve(false);
+        }
+
+        // Deserialize the foreign tree
+        const leaves = (serializedTree as any).leaves.map((leaf: string) =>
+          Buffer.from(leaf, "hex")
+        );
+        const tree = new MerkleTree(leaves, SHA256, { sortPairs: true });
+
+        // Verify that the deserialized tree's root matches the expected root hash
+        const treeRootHash = tree.getRoot().toString("hex");
+        if (treeRootHash !== expectedRootHash) {
+          console.warn(
+            `Expected root hash ${expectedRootHash}, but got ${treeRootHash}`
+          );
+          return resolve(false);
+        }
+
+        // Rebuild the files map from the serialized tree
+        // @ts-ignore
+        tree.files = new Map(
+          Object.entries((serializedTree as any).files).map(
+            ([key, value]: [string, any]) => [
+              key,
+              { hash: value.hash, sha256: value.sha256 },
+            ]
+          )
+        );
+
+        // Check if the SHA-256 exists in the foreign tree's files
+        const combinedHash = crypto
+          .createHash("sha256")
+          .update(`${hexkey}/${sha256}`)
+          .digest("hex");
+
+        const leaf = Buffer.from(combinedHash, "hex");
+        const isInTree = tree.getLeafIndex(leaf) !== -1;
+
+        resolve(isInTree);
+      });
+
+      decompressStream.on("error", (err) => {
+        reject(err);
+      });
+
+      compressedReadStream.on("error", (err) => {
+        reject(err);
+      });
+    });
   }
 }
 
