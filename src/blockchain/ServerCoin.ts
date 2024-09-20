@@ -241,7 +241,9 @@ export class ServerCoin {
     blacklist: string[] = []
   ): Promise<string[]> {
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
-    console.log("Server Coin Peers: ", serverCoinPeers);
+    if (process.env.DIG_DEBUG === "1") {
+      console.log("Server Coin Peers: ", serverCoinPeers);
+    }
     return _.sampleSize(serverCoinPeers, sampleSize);
   }
 
