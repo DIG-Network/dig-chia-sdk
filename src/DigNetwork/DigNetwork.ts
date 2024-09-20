@@ -178,7 +178,7 @@ export class DigNetwork {
 
         const peerIp = digPeers[0];
         const digPeer = new DigPeer(peerIp, storeId);
-        const storeResponse = await digPeer.propagationServer.headStore({
+        const storeResponse = await digPeer.contentServer.headStore({
           hasRootHash: rootHash,
         });
 
@@ -348,6 +348,12 @@ export class DigNetwork {
 
       for (const digPeer of digPeers) {
         if (blacklist.has(digPeer.IpAddress)) continue;
+
+        const response = await digPeer.propagationServer.headStore();
+
+        if (!response.success) {
+          continue;
+        }
 
         try {
           // Create directory if it doesn't exist
