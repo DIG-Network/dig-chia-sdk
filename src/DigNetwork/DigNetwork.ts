@@ -167,42 +167,60 @@ export class DigNetwork {
     rootHash: string,
     key?: string,
     intialBlackList: string[] = []
-  ): Promise<string | null> {
+  ): Promise<DigPeer | null> {
     const peerBlackList: string[] = intialBlackList;
     const serverCoin = new ServerCoin(storeId);
+    let peerIp: string | null = null;
 
+    // Keep sampling peers until an empty array is returned
     while (true) {
       try {
+        // Sample a peer from the current epoch
         const digPeers = await serverCoin.sampleCurrentEpoch(1, peerBlackList);
-        if (digPeers.length === 0) break;
 
-        const peerIp = digPeers[0];
+        // If no peers are returned, break out of the loop
+        if (digPeers.length === 0) {
+          console.log("No more peers found.");
+          break;
+        }
+
+        peerIp = digPeers[0];
         const digPeer = new DigPeer(peerIp, storeId);
-        const storeResponse = await digPeer.propagationServer.headStore({
+
+        // Try to fetch the head store information
+        const storeResponse = await digPeer.contentServer.headStore({
           hasRootHash: rootHash,
         });
 
-        console.log(peerIp, storeResponse.headers);
-
+        // If the peer has the correct root hash, check if key is required
         if (storeResponse.headers?.["x-has-roothash"] === "true") {
           console.log(
             `Found Peer at ${peerIp} for storeId: ${storeId}, root hash ${rootHash}`
           );
 
+          // If no key is provided, return the peer
           if (!key) {
-            return peerIp;
+            return digPeer;
           }
 
+          // If key is provided, check if the peer has it
           const keyResponse = await digPeer.contentServer.headKey(key);
           if (keyResponse.headers?.["x-key-exists"] === "true") {
-            return peerIp;
+            return digPeer;
           }
         }
 
+        // Add peer to blacklist if it doesn't meet criteria
         peerBlackList.push(peerIp);
-      } catch {}
+      } catch (error) {
+        console.error(`Error connecting to peer ${peerIp}. Resampling...`);
+        if (peerIp) {
+          peerBlackList.push(peerIp); // Add to blacklist if error occurs
+        }
+      }
     }
 
+    // Return null if no valid peer was found
     return null;
   }
 
@@ -219,9 +237,14 @@ export class DigNetwork {
     renderProgressBar: boolean = true,
     skipData: boolean = false
   ): Promise<void> {
+    console.log("Starting file download process...");
+    let peerBlackList: string[] = [];
+    let selectedPeer: DigPeer | null = null;
+
     try {
       const rootHistory: RootHistoryItem[] =
         await this.dataStore.getRootHistory();
+
       if (!rootHistory.length) {
         throw new Error(
           "No roots found in rootHistory. Cannot proceed with file download."
@@ -230,65 +253,89 @@ export class DigNetwork {
 
       await this.downloadHeightFile(true);
 
-      const rootHistorySorted = rootHistory
+      // Filter out rootInfo entries where the .dat file already exists
+      const rootHistoryFiltered = rootHistory
         .filter((item) => item.timestamp !== undefined)
-        .sort((a, b) => (b.timestamp as number) - (a.timestamp as number));
+        .filter(
+          (item) => !fs.existsSync(`${this.storeDir}/${item.root_hash}.dat`)
+        )
+        .reverse();
 
-      // Process rootHistory sequentially
-      for (const rootInfo of rootHistorySorted) {
-        const peerIp = await DigNetwork.findPeerWithStoreKey(
-          this.dataStore.StoreId,
-          rootInfo.root_hash
+      if (!rootHistoryFiltered.length) {
+        console.log(
+          "All root hashes already exist locally. No need for download."
         );
+        return;
+      }
 
-        if (fs.existsSync(`${this.storeDir}/${rootInfo.root_hash}.dat`)) {
-          console.log(
-            `Root hash ${rootInfo.root_hash} already exists locally. Skipping download.`
-          );
-          continue; // Skip to the next rootInfo
-        }
-
-        if (!peerIp) {
-          console.error(
-            `No peer found with root hash ${rootInfo.root_hash}. Skipping download.`
-          );
-          continue; // Skip to the next rootInfo
-        }
-
-        const digPeer = new DigPeer(peerIp, this.dataStore.StoreId);
-        const rootResponse = await digPeer.propagationServer.getStoreData(
-          `${rootInfo.root_hash}.dat`
-        );
-
-        fs.writeFileSync(
-          `${this.storeDir}/${rootInfo.root_hash}.dat`,
-          rootResponse
-        );
-
-        const root = JSON.parse(rootResponse);
-
-        if (!skipData) {
-          // Explicitly define the type for file entries
-          interface FileEntry {
-            sha256: string;
-          }
-
-          // Sequential file download
-          for (const [storeKey, file] of Object.entries<FileEntry>(
-            root.files
-          )) {
-            const filePath = getFilePathFromSha256(
-              file.sha256,
-              `${this.storeDir}/data`
+      // Process filtered rootHistory sequentially
+      for (const rootInfo of rootHistoryFiltered) {
+        while (true) {
+          try {
+            selectedPeer = await DigNetwork.findPeerWithStoreKey(
+              this.dataStore.StoreId,
+              rootInfo.root_hash,
+              undefined,
+              peerBlackList
             );
 
-            if (!fs.existsSync(filePath) || forceDownload) {
-              console.log(`Downloading file with sha256: ${file.sha256}...`);
-              await this.downloadFileFromPeers(
-                `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`,
-                filePath,
-                forceDownload
+            if (!selectedPeer) {
+              console.error(
+                `No peer found with root hash ${rootInfo.root_hash}. Skipping download.`
               );
+              break; // Exit loop if no more peers are found
+            }
+
+            const rootResponse =
+              await selectedPeer.propagationServer.getStoreData(
+                `${rootInfo.root_hash}.dat`
+              );
+
+            const root = JSON.parse(rootResponse);
+
+            if (!skipData) {
+              // Explicitly define the type for file entries
+              interface FileEntry {
+                sha256: string;
+              }
+
+              // Sequential file download
+              for (const [storeKey, file] of Object.entries<FileEntry>(
+                root.files
+              )) {
+                const filePath = getFilePathFromSha256(
+                  file.sha256,
+                  `${this.storeDir}/data`
+                );
+
+                if (!fs.existsSync(filePath) || forceDownload) {
+                  console.log(
+                    `Downloading file with sha256: ${file.sha256}...`
+                  );
+                  await selectedPeer.downloadData(
+                    this.dataStore.StoreId,
+                    `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`
+                  );
+                }
+              }
+            }
+
+            fs.writeFileSync(
+              `${this.storeDir}/${rootInfo.root_hash}.dat`,
+              rootResponse
+            );
+            peerBlackList = []; // Clear the blacklist upon successful download
+
+            // Break out of the retry loop if the download succeeds
+            break;
+          } catch (error: any) {
+            console.error(
+              `Error downloading from peer. Retrying with another peer.`,
+              error
+            );
+
+            if (selectedPeer) {
+              peerBlackList.push(selectedPeer.IpAddress); // Add peer to blacklist and try again
             }
           }
         }
@@ -298,7 +345,9 @@ export class DigNetwork {
 
       console.log("Syncing store complete.");
     } catch (error: any) {
-      console.trace(error);
+      if (selectedPeer) {
+        peerBlackList.push(selectedPeer.IpAddress);
+      }
       throw error;
     }
   }

@@ -1,10 +1,12 @@
 import { Readable } from "stream";
+import path from "path";
 import crypto from "crypto";
 import { ContentServer } from "./ContentServer";
 import { PropagationServer } from "./PropagationServer";
 import { IncentiveServer } from "./IncentiveServer";
 import { DataStore } from "../blockchain";
 import { DataIntegrityTree } from "../DataIntegrityTree";
+import fs from "fs";
 import {
   sendXch,
   addressToPuzzleHash,
@@ -15,6 +17,11 @@ import {
 import { FullNodePeer } from "../blockchain";
 import { Wallet } from "../blockchain";
 import { selectUnspentCoins } from "../blockchain/coins";
+import { STORE_PATH } from "../utils/config";
+import { promisify } from "util";
+
+const rename = promisify(fs.rename);
+const unlink = promisify(fs.unlink);
 
 export class DigPeer {
   private ipAddress: string;
@@ -298,5 +305,50 @@ export class DigPeer {
 
     // Return the 32-byte hash as a hex string
     return transformedBuffer;
+  }
+
+  public async downloadData(storeId: string, dataPath: string): Promise<void> {
+    const filePath = path.join(STORE_PATH, storeId, dataPath);
+    const tempFilePath = `${filePath}.tmp`;
+
+    try {
+      const headStoreResponse = await this.propagationServer.headStore();
+      if (!headStoreResponse.success) {
+        throw new Error("Data not accessible from store.");
+      }
+
+      const directory = path.dirname(tempFilePath);
+      if (!fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+      }
+
+      const fileStream = fs.createWriteStream(tempFilePath);
+      const dataStream = await this.propagationServer.streamStoreData(dataPath);
+
+      await new Promise<void>((resolve, reject) => {
+        dataStream.pipe(fileStream);
+
+        dataStream.on("end", resolve);
+        dataStream.on("error", reject);
+        fileStream.on("error", reject);
+      });
+
+      await rename(tempFilePath, filePath);
+
+      console.log(`Downloaded ${dataPath} from ${this.IpAddress}`);
+    } catch (error: any) {
+      console.error(`Failed to download data: ${error.message}`);
+
+      if (fs.existsSync(tempFilePath)) {
+        await unlink(tempFilePath);
+      }
+
+      // Check if directory is empty and remove it if it is
+      const directory = path.dirname(tempFilePath);
+      if (fs.existsSync(directory) && fs.readdirSync(directory).length === 0) {
+        fs.rmdirSync(directory);
+        console.log(`Removed empty directory: ${directory}`);
+      }
+    }
   }
 }
