@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.49](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.48...v0.0.1-alpha.49) (2024-09-20)
+
+
+### Features
+
+* add cache to getAllEpochPeers ([2ba45ef](https://github.com/DIG-Network/dig-chia-sdk/commit/2ba45effadb6efc6babdef37e82edc9fa2f0bfec))
+
 ### [0.0.1-alpha.48](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.47...v0.0.1-alpha.48) (2024-09-20)
 
 
