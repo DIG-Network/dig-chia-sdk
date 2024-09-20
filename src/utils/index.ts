@@ -1,7 +1,6 @@
 export * from './config';
 export * from './connectionUtils';
 export * from './credentialsUtils';
-export * from './deltaUtils';
 export * from './directoryUtils';
 export * from './encryption';
 export * from './FileCache';
