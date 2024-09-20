@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.52](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.51...v0.0.1-alpha.52) (2024-09-20)
+
+
+### Features
+
+* phase out manifest file ([8d037e6](https://github.com/DIG-Network/dig-chia-sdk/commit/8d037e67372124120534280ddeecdf88831c4191))
+
 ### [0.0.1-alpha.51](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.50...v0.0.1-alpha.51) (2024-09-20)
 
 
