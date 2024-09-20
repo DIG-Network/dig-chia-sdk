@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.45](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.44...v0.0.1-alpha.45) (2024-09-20)
+
+### [0.0.1-alpha.44](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.43...v0.0.1-alpha.44) (2024-09-20)
+
+
+### Features
+
+* temp disable ssl on content server driver while ssl bug figured out ([28a3b3d](https://github.com/DIG-Network/dig-chia-sdk/commit/28a3b3d6ea9d7355e2b4260ba2547d57f0c7fd3c))
+
 ### [0.0.1-alpha.43](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.42...v0.0.1-alpha.43) (2024-09-20)
 
 

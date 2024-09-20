@@ -291,7 +291,7 @@ export class FullNodePeer {
 
     FullNodePeer.cachedPeer = { peer: bestPeer, timestamp: now };
 
-    console.log(`Using Peer: ${peerIPs[bestPeerIndex]}`);
+    console.log(`Using Fullnode Peer: ${peerIPs[bestPeerIndex]}`);
 
     return bestPeer;
   }
