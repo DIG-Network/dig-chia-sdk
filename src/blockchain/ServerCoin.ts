@@ -14,8 +14,12 @@ import { Wallet } from "./Wallet";
 import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
+import NodeCache from "node-cache";
 
 const serverCoinCollateral = 300_000_000;
+
+// Initialize the cache with a TTL of 300 seconds (5 minutes)
+const serverCoinPeersCache = new NodeCache({ stdTTL: 300 });
 
 export class ServerCoin {
   private storeId: string;
@@ -179,22 +183,21 @@ export class ServerCoin {
     );
   }
 
-  public async getAllEpochPeers(
-    epoch: number,
-    blacklist: string[] = []
-  ): Promise<string[]> {
-    const epochBasedHint = morphLauncherId(
-      Buffer.from(this.storeId, "hex"),
-      BigInt(epoch)
-    );
+  public async getAllEpochPeers(epoch: number, blacklist: string[] = []): Promise<string[]> {
+    const cacheKey = `serverCoinPeers-${this.storeId}-${epoch}`;
+
+    // Check if the result is already cached
+    const cachedPeers = serverCoinPeersCache.get<string[]>(cacheKey);
+    if (cachedPeers) {
+      return cachedPeers;
+    }
+
+    const epochBasedHint = morphLauncherId(Buffer.from(this.storeId, "hex"), BigInt(epoch));
 
     const peer = await FullNodePeer.connect();
     const maxClvmCost = BigInt(11_000_000_000);
 
-    const hintedCoinStates = await peer.getHintedCoinStates(
-      epochBasedHint,
-      false
-    );
+    const hintedCoinStates = await peer.getHintedCoinStates(epochBasedHint, false);
 
     const filteredCoinStates = hintedCoinStates.filter(
       (coinState) => coinState.coin.amount >= serverCoinCollateral
@@ -215,7 +218,12 @@ export class ServerCoin {
       console.log("Server Coin Peers: ", serverCoinPeers);
     }
 
-    return Array.from(serverCoinPeers);
+    const peerList = Array.from(serverCoinPeers);
+
+    // Cache the result
+    serverCoinPeersCache.set(cacheKey, peerList);
+
+    return peerList;
   }
 
   public async getActiveEpochPeers(
