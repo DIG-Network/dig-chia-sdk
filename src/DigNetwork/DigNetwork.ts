@@ -178,7 +178,7 @@ export class DigNetwork {
 
         const peerIp = digPeers[0];
         const digPeer = new DigPeer(peerIp, storeId);
-        const storeResponse = await digPeer.contentServer.headStore({
+        const storeResponse = await digPeer.propagationServer.headStore({
           hasRootHash: rootHash,
         });
 
