@@ -11,6 +11,7 @@ import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 
 const FULLNODE_PORT = 8444;
 const LOCALHOST = "127.0.0.1";
+const CHIA_NODES_HOST = "chia-nodes";
 const DNS_HOSTS = [
   "dns-introducer.chia.net",
   "chia.ctrlaltdel.ch",
@@ -27,9 +28,7 @@ export class FullNodePeer {
   private static deprioritizedIps: Set<string> = new Set(); // New set for deprioritized IPs
 
   static {
-    FullNodePeer.memoizedFetchNewPeerIPs = memoize(
-      FullNodePeer.fetchNewPeerIPs
-    );
+    FullNodePeer.memoizedFetchNewPeerIPs = memoize(FullNodePeer.fetchNewPeerIPs);
   }
 
   private constructor(peer: Peer) {
@@ -67,7 +66,7 @@ export class FullNodePeer {
   /**
    * Retrieves the TRUSTED_FULLNODE IP from the environment
    * and verifies if it is a valid IP address.
-   * 
+   *
    * @returns {string | null} The valid IP address or null if invalid
    */
   private static getTrustedFullNode(): string | null {
@@ -100,6 +99,14 @@ export class FullNodePeer {
       priorityIps.push(LOCALHOST);
     }
 
+    // Prioritize CHIA_NODES_HOST unless it's deprioritized
+    if (
+      !FullNodePeer.deprioritizedIps.has(CHIA_NODES_HOST) &&
+      (await FullNodePeer.isPortReachable(CHIA_NODES_HOST, FULLNODE_PORT))
+    ) {
+      priorityIps.push(CHIA_NODES_HOST);
+    }
+
     if (priorityIps.length > 0) {
       return priorityIps;
     }
@@ -124,9 +131,7 @@ export class FullNodePeer {
           }
         }
       } catch (error: any) {
-        console.error(
-          `Failed to resolve IPs from ${DNS_HOST}: ${error.message}`
-        );
+        console.error(`Failed to resolve IPs from ${DNS_HOST}: ${error.message}`);
       }
     }
     throw new Error("No reachable IPs found in any DNS records.");
@@ -150,6 +155,8 @@ export class FullNodePeer {
 
     // @ts-ignore
     if (FullNodePeer.memoizedFetchNewPeerIPs?.cache?.clear) {
+      // Clear cache and reset deprioritized IPs when cache is cleared
+      FullNodePeer.deprioritizedIps.clear();
       // @ts-ignore
       FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
     }
@@ -193,6 +200,7 @@ export class FullNodePeer {
                 FullNodePeer.cachedPeer = null;
                 // @ts-ignore
                 FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
+                FullNodePeer.deprioritizedIps.clear();
                 console.info(`Fullnode Peer error, reconnecting to a new peer...`);
                 const newPeer = await FullNodePeer.getBestPeer();
                 return (newPeer as any)[prop](...args);
@@ -241,9 +249,7 @@ export class FullNodePeer {
             );
             return FullNodePeer.createPeerProxy(peer);
           } catch (error: any) {
-            console.error(
-              `Failed to create peer for IP ${ip}: ${error.message}`
-            );
+            console.error(`Failed to create peer for IP ${ip}: ${error.message}`);
             return null;
           }
         }
@@ -279,15 +285,15 @@ export class FullNodePeer {
 
     const highestPeak = Math.max(...validHeights);
 
-    // Prioritize LOCALHOST and TRUSTED_NODE_IP if they have the highest peak height
+    // Prioritize LOCALHOST, TRUSTED_NODE_IP, and CHIA_NODES_HOST if they have the highest peak height
     let bestPeerIndex = validHeights.findIndex(
       (height, index) =>
         height === highestPeak &&
         !FullNodePeer.deprioritizedIps.has(peerIPs[index]) && // Exclude deprioritized IPs
-        (peerIPs[index] === LOCALHOST || peerIPs[index] === trustedNodeIp)
+        (peerIPs[index] === LOCALHOST || peerIPs[index] === trustedNodeIp || peerIPs[index] === CHIA_NODES_HOST)
     );
 
-    // If LOCALHOST or TRUSTED_NODE_IP don't have the highest peak, select any peer with the highest peak
+    // If LOCALHOST, TRUSTED_NODE_IP, or CHIA_NODES_HOST don't have the highest peak, select any peer with the highest peak
     if (bestPeerIndex === -1) {
       bestPeerIndex = validHeights.findIndex(
         (height) => height === highestPeak

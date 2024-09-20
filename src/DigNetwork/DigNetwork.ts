@@ -260,6 +260,7 @@ export class DigNetwork {
         .filter(
           (item) => !fs.existsSync(`${this.storeDir}/${item.root_hash}.dat`)
         )
+        // Reverse to download the latest first
         .reverse();
 
       if (!rootHistoryFiltered.length) {
@@ -309,38 +310,36 @@ export class DigNetwork {
                   `${this.storeDir}/data`
                 );
 
-                if (!fs.existsSync(filePath) || forceDownload) {
+                console.log(`Downloading file with sha256: ${file.sha256}...`);
+
+                await selectedPeer.downloadData(
+                  this.dataStore.StoreId,
+                  `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`
+                );
+
+                const integrityCheck =
+                  await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
+                    storeKey,
+                    file.sha256,
+                    root,
+                    rootInfo.root_hash,
+                    `${this.storeDir}/data`
+                  );
+
+                if (integrityCheck) {
                   console.log(
-                    `Downloading file with sha256: ${file.sha256}...`
+                    `\x1b[32mIntegrity check passed for file with sha256: ${file.sha256}.\x1b[0m`
                   );
-
-                  await selectedPeer.downloadData(
-                    this.dataStore.StoreId,
-                    `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`
-                  );
-
-                  const integrityCheck =
-                    await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
-                      storeKey,
-                      file.sha256,
-                      root,
-                      rootInfo.root_hash,
-                      `${this.storeDir}/data`
-                    );
-
-                  if (integrityCheck) {
-                    console.log(
-                      `\x1b[32mIntegrity check passed for file with sha256: ${file.sha256}.\x1b[0m`
-                    );
-                    continue;
-                  }
-
-                  console.error(
-                    `\x1b[31mIntegrity check failed for file with sha256: ${file.sha256}.\x1b[0m`
-                  );
-                  await unlink(filePath);
-                  throw new Error(`Store Integrity check failed. Syncing file from another peer.`);
+                  continue;
                 }
+
+                console.error(
+                  `\x1b[31mIntegrity check failed for file with sha256: ${file.sha256}.\x1b[0m`
+                );
+                await unlink(filePath);
+                throw new Error(
+                  `Store Integrity check failed. Syncing file from another peer.`
+                );
               }
             }
 
@@ -363,6 +362,11 @@ export class DigNetwork {
             }
           }
         }
+
+        // Only process the first root hash so other stores can sync the latest.
+        // This has an effect where the latest roothash will always be synced first, even if new ones come in.
+        // Then it will backfill historical roothashes
+        break;
       }
 
       await this.downloadManifestFile(true);
@@ -370,7 +374,7 @@ export class DigNetwork {
       console.log("Syncing store complete.");
     } catch (error: any) {
       if (selectedPeer) {
-        peerBlackList.push(selectedPeer.IpAddress);
+        peerBlackList.push((selectedPeer as DigPeer).IpAddress);
       }
 
       console.trace(error);
