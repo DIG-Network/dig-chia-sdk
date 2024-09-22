@@ -7,7 +7,7 @@ import { getOrCreateSSLCerts } from "../utils/ssl";
 import { promptCredentials } from "../utils/credentialsUtils";
 import https from "https";
 import cliProgress from "cli-progress";
-import chalk from "chalk"; // For colored output
+import { green, red, cyan, yellow, blue } from "colorette"; // For colored output
 import ora from "ora"; // For spinners
 import { STORE_PATH } from "../utils/config";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
@@ -31,8 +31,8 @@ export class PropagationServer {
       clearOnComplete: false,
       hideCursor: true,
       format:
-        chalk.green(" {bar} ") +
-        chalk.cyan(" | {filename} | {percentage}% | {value}/{total} bytes"),
+        green(" {bar} ") +
+        cyan(" | {filename} | {percentage}% | {value}/{total} bytes"),
       barsize: 40,
       stopOnComplete: true,
       align: "center",
@@ -98,27 +98,27 @@ export class PropagationServer {
       const rootHashExists = response.headers["x-has-root-hash"] === "true";
 
       if (storeExists) {
-        spinner.succeed(chalk.green(`Store ${this.storeId} exists!`));
+        spinner.succeed(green(`Store ${this.storeId} exists!`));
       } else {
-        spinner.fail(chalk.red(`Store ${this.storeId} does not exist.`));
+        spinner.fail(red(`Store ${this.storeId} does not exist.`));
       }
 
       if (rootHash) {
         if (rootHashExists) {
           console.log(
-            chalk.green(`Root hash ${rootHash} exists in the store.`)
+            green(`Root hash ${rootHash} exists in the store.`)
           );
         } else {
           console.log(
-            chalk.red(`Root hash ${rootHash} does not exist in the store.`)
+            red(`Root hash ${rootHash} does not exist in the store.`)
           );
         }
       }
 
       return { storeExists, rootHashExists };
-    } catch (error) {
-      spinner.fail(chalk.red("Error checking if store exists:"));
-      console.error(chalk.red(error));
+    } catch (error: any) {
+      spinner.fail(red("Error checking if store exists:"));
+      console.error(red(error));
       throw error;
     }
   }
@@ -152,13 +152,13 @@ export class PropagationServer {
 
       this.sessionId = response.data.sessionId;
       spinner.succeed(
-        chalk.green(
+        green(
           `Upload session started for DataStore ${this.storeId} with session ID ${this.sessionId}`
         )
       );
-    } catch (error) {
-      spinner.fail(chalk.red("Error starting upload session:"));
-      console.error(chalk.red(error));
+    } catch (error: any) {
+      spinner.fail(red("Error starting upload session:"));
+      console.error(red(error));
       throw error;
     }
   }
@@ -175,11 +175,11 @@ export class PropagationServer {
       const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
       const response = await axios.head(url, config);
       const nonce = response.headers["x-nonce"];
-      console.log(chalk.blue(`Nonce received for file ${filename}: ${nonce}`));
+      console.log(blue(`Nonce received for file ${filename}: ${nonce}`));
       return nonce;
     } catch (error) {
       console.error(
-        chalk.red(`Error generating nonce for file ${filename}:`),
+        red(`Error generating nonce for file ${filename}:`),
         error
       );
       throw error;
@@ -204,7 +204,7 @@ export class PropagationServer {
 
     // Create a new progress bar for each file
     const progressBar = PropagationServer.multiBar.create(fileSize, 0, {
-      filename: chalk.yellow(filename),
+      filename: yellow(filename),
       percentage: 0,
     });
 
@@ -231,7 +231,7 @@ export class PropagationServer {
     try {
       const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
       const response = await axios.put(url, formData, config);
-      console.log(chalk.green(`✔ File ${filename} uploaded successfully.`));
+      console.log(green(`✔ File ${filename} uploaded successfully.`));
 
       // Complete the progress bar
       progressBar.update(fileSize, { percentage: 100 });
@@ -239,7 +239,7 @@ export class PropagationServer {
 
       return response.data;
     } catch (error) {
-      console.error(chalk.red(`✖ Error uploading file ${filename}:`), error);
+      console.error(red(`✖ Error uploading file ${filename}:`), error);
       progressBar.stop(); // Stop the progress bar in case of error
       throw error;
     }
@@ -268,7 +268,7 @@ export class PropagationServer {
     // If the store does not exist, prompt for credentials
     if (!storeExists) {
       console.log(
-        chalk.red(
+        red(
           `Store ${storeId} does not exist. Prompting for credentials...`
         )
       );
@@ -292,7 +292,7 @@ export class PropagationServer {
     PropagationServer.multiBar.stop();
 
     console.log(
-      chalk.green(`✔ All files have been uploaded to DataStore ${storeId}.`)
+      green(`✔ All files have been uploaded to DataStore ${storeId}.`)
     );
   }
 
@@ -314,11 +314,11 @@ export class PropagationServer {
       const response = await axios.get(url, config);
       const totalLength = parseInt(response.headers["content-length"], 10);
 
-      console.log(chalk.cyan(`Starting fetch for ${dataPath}...`));
+      console.log(cyan(`Starting fetch for ${dataPath}...`));
 
       // Create a progress bar for the download
       const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-        dataPath: chalk.yellow(dataPath),
+        dataPath: yellow(dataPath),
         percentage: 0,
       });
 
@@ -336,12 +336,12 @@ export class PropagationServer {
       progressBar.update(totalLength, { percentage: 100 });
       progressBar.stop();
 
-      console.log(chalk.green(`✔ File ${dataPath} fetched successfully.`));
+      console.log(green(`✔ File ${dataPath} fetched successfully.`));
 
       // Return the file contents as a Buffer
       return Buffer.from(response.data);
     } catch (error) {
-      console.error(chalk.red(`✖ Error fetching file ${dataPath}:`), error);
+      console.error(red(`✖ Error fetching file ${dataPath}:`), error);
       throw error;
     }
   }
@@ -369,11 +369,11 @@ export class PropagationServer {
       const response = await axios.get(url, config);
       const totalLength = parseInt(response.headers["content-length"], 10);
 
-      console.log(chalk.cyan(`Starting download for ${dataPath}...`));
+      console.log(cyan(`Starting download for ${dataPath}...`));
 
       // Create a progress bar for the download
       const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-        dataPath: chalk.yellow(dataPath),
+        dataPath: yellow(dataPath),
         percentage: 0,
       });
 
@@ -395,7 +395,7 @@ export class PropagationServer {
           progressBar.update(totalLength, { percentage: 100 });
           progressBar.stop();
           console.log(
-            chalk.green(
+            green(
               `✔ File ${dataPath} downloaded successfully to ${downloadPath}.`
             )
           );
@@ -405,14 +405,14 @@ export class PropagationServer {
         fileWriteStream.on("error", (error) => {
           progressBar.stop();
           console.error(
-            chalk.red(`✖ Error downloading file ${dataPath}:`),
+            red(`✖ Error downloading file ${dataPath}:`),
             error
           );
           reject(error);
         });
       });
     } catch (error) {
-      console.error(chalk.red(`✖ Error downloading file ${dataPath}:`), error);
+      console.error(red(`✖ Error downloading file ${dataPath}:`), error);
       throw error;
     }
   }
@@ -452,6 +452,6 @@ export class PropagationServer {
       await propagationServer.downloadFile(dataPath);
     }
 
-    console.log(chalk.green(`✔ All files have been downloaded to ${storeId}.`));
+    console.log(green(`✔ All files have been downloaded to ${storeId}.`));
   }
 }

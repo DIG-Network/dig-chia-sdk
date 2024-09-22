@@ -25,7 +25,7 @@ import {
 } from "../utils/config";
 import { selectUnspentCoins, calculateFeeForCoinSpends } from "./coins";
 import { RootHistoryItem, DatFile } from "../types";
-import chalk from "chalk";
+import { green, red } from "colorette"; 
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
@@ -584,12 +584,12 @@ export class DataStore {
 
       if (integrityCheck) {
         console.log(
-          chalk.green(`File ${fileKey} has passed the integrity check.`)
+          green(`File ${fileKey} has passed the integrity check.`)
         );
         // Add the file to the file set only if the integrity check passes
         filesInvolved.push(filePath);
       } else {
-        console.error(chalk.red(`File ${fileKey} failed the integrity check.`));
+        console.error(red(`File ${fileKey} failed the integrity check.`));
         throw new Error(
           `Integrity check failed for file: ${fileKey}. Aborting.`
         );
