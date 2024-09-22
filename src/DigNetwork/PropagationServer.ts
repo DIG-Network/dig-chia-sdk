@@ -561,6 +561,9 @@ export class PropagationServer {
       await propagationServer.downloadFile(dataPath);
     }
 
+    const dataStore = new DataStore(storeId);
+    await dataStore.generateManifestFile();
+
     console.log(green(`✔ All files have been downloaded to ${storeId}.`));
   }
 }
