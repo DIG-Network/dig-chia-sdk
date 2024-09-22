@@ -30,7 +30,7 @@ export class DigNetwork {
       recursive: true,
     });
     const digNetwork = new DigNetwork(storeId);
-    await digNetwork.downloadFiles(true);
+    await digNetwork.syncStoreFromPeers();
   }
 
   public static async findPeerWithStoreKey(
@@ -102,9 +102,7 @@ export class DigNetwork {
     fs.unlinkSync(path.join(DIG_FOLDER_PATH, "stores", storeId + ".json"));
   }
 
-  public async downloadFiles(
-    skipData: boolean = false
-  ): Promise<void> {
+  public async syncStoreFromPeers(): Promise<void> {
     console.log("Starting file download process...");
     let peerBlackList: string[] = [];
     let selectedPeer: DigPeer | null = null;
@@ -119,16 +117,13 @@ export class DigNetwork {
         );
       }
 
-      await this.downloadHeightFile(true);
-
       // Filter out rootInfo entries where the .dat file already exists
       const rootHistoryFiltered = rootHistory
         .filter((item) => item.timestamp !== undefined)
         .filter(
           (item) => !fs.existsSync(`${this.storeDir}/${item.root_hash}.dat`)
         )
-        // Reverse to download the latest first
-        .reverse();
+        .reverse(); // Reverse to download the latest first
 
       if (!rootHistoryFiltered.length) {
         console.log(
@@ -141,6 +136,7 @@ export class DigNetwork {
       for (const rootInfo of rootHistoryFiltered) {
         while (true) {
           try {
+            // Find a peer with the store and root hash
             selectedPeer = await DigNetwork.findPeerWithStoreKey(
               this.dataStore.StoreId,
               rootInfo.root_hash,
@@ -155,65 +151,31 @@ export class DigNetwork {
               break; // Exit loop if no more peers are found
             }
 
-            const rootResponse =
-              await selectedPeer.propagationServer.getStoreData(
-                `${rootInfo.root_hash}.dat`
+            // Ensure the selected peer has the store by checking with a HEAD request
+            const { storeExists, rootHashExists } =
+              await selectedPeer.propagationServer.checkStoreExists(
+                rootInfo.root_hash
               );
 
-            const root = JSON.parse(rootResponse);
-
-            if (!skipData) {
-              // Explicitly define the type for file entries
-              interface FileEntry {
-                sha256: string;
-              }
-
-              // Sequential file download
-              for (const [storeKey, file] of Object.entries<FileEntry>(
-                root.files
-              )) {
-                const filePath = getFilePathFromSha256(
-                  file.sha256,
-                  `${this.storeDir}/data`
-                );
-
-                console.log(`Downloading file with sha256: ${file.sha256}...`);
-
-                await selectedPeer.downloadData(
-                  this.dataStore.StoreId,
-                  `data/${file.sha256.match(/.{1,2}/g)!.join("/")}`
-                );
-
-                const integrityCheck =
-                  await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
-                    storeKey,
-                    file.sha256,
-                    root,
-                    rootInfo.root_hash,
-                    `${this.storeDir}/data`
-                  );
-
-                if (integrityCheck) {
-                  console.log(
-                    `\x1b[32mIntegrity check passed for file with sha256: ${file.sha256}.\x1b[0m`
-                  );
-                  continue;
-                }
-
-                console.error(
-                  `\x1b[31mIntegrity check failed for file with sha256: ${file.sha256}.\x1b[0m`
-                );
-                await unlink(filePath);
-                throw new Error(
-                  `Store Integrity check failed. Syncing file from another peer.`
-                );
-              }
+            if (!storeExists) {
+              console.warn(
+                `Peer ${selectedPeer.IpAddress} does not have the store. Trying another peer...`
+              );
+              peerBlackList.push(selectedPeer.IpAddress); // Add peer to blacklist and try again
+              continue;
             }
 
-            fs.writeFileSync(
-              `${this.storeDir}/${rootInfo.root_hash}.dat`,
-              rootResponse
-            );
+            if (!rootHashExists) {
+              console.warn(
+                `Peer ${selectedPeer.IpAddress} does not have the root hash. Trying another peer...`
+              );
+              peerBlackList.push(selectedPeer.IpAddress); // Add peer to blacklist and try again
+              continue;
+            }
+
+            // Download the store root and all associated data from the selected peer
+            await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
+
             peerBlackList = []; // Clear the blacklist upon successful download
 
             // Break out of the retry loop if the download succeeds
@@ -230,9 +192,7 @@ export class DigNetwork {
           }
         }
 
-        // Only process the first root hash so other stores can sync the latest.
-        // This has an effect where the latest roothash will always be synced first, even if new ones come in.
-        // Then it will backfill historical roothashes
+        // Process the latest root hash first, breaking after each success to handle new incoming roots
         break;
       }
 
@@ -242,7 +202,6 @@ export class DigNetwork {
         peerBlackList.push((selectedPeer as DigPeer).IpAddress);
       }
 
-      console.trace(error);
       throw error;
     }
   }
@@ -259,16 +218,7 @@ export class DigNetwork {
     return peers.map((ip: string) => new DigPeer(ip, this.dataStore.StoreId));
   }
 
-  private async downloadHeightFile(forceDownload: boolean): Promise<void> {
-    const heightFilePath = path.join(this.storeDir, "height.json");
-    await this.downloadFileFromPeers(
-      "height.json",
-      heightFilePath,
-      forceDownload
-    );
-  }
-
-  private async downloadFileFromPeers(
+  public async downloadFileFromPeers(
     dataPath: string,
     filePath: string,
     overwrite: boolean
@@ -285,7 +235,19 @@ export class DigNetwork {
         try {
           if (blacklist.has(digPeer.IpAddress)) continue;
 
-          await digPeer.downloadData(this.dataStore.StoreId, dataPath);
+          // Ensure the selected peer has the store by checking with a HEAD request
+          const { storeExists } =
+            await digPeer.propagationServer.checkStoreExists();
+
+          if (!storeExists) {
+            console.warn(
+              `Peer ${digPeer.IpAddress} does not have the store. Trying another peer...`
+            );
+            blacklist.add(digPeer.IpAddress); // Add peer to blacklist and try again
+            continue;
+          }
+
+          await digPeer.downloadData(dataPath);
 
           return; // Exit the method if download succeeds
         } catch (error) {
@@ -302,26 +264,5 @@ export class DigNetwork {
         }
       }
     }
-  }
-
-  private async runProgressBar(
-    total: number,
-    name: string,
-    task: (progress: any) => Promise<void>
-  ): Promise<void> {
-    // Using 'any' to work around TypeScript issues
-    const multiBar = new MultiBar(
-      {
-        clearOnComplete: false,
-        hideCursor: true,
-        format: "{bar} | {percentage}% | {name}",
-        noTTYOutput: true,
-      },
-      Presets.shades_classic
-    );
-    const progress = multiBar.create(total, 0, { name });
-    await task(progress).finally(() => {
-      multiBar.stop();
-    });
   }
 }

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.54](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.53...v0.0.1-alpha.54) (2024-09-22)
+
+
+### Features
+
+* add improved propagation server driver ([a6d918e](https://github.com/DIG-Network/dig-chia-sdk/commit/a6d918e78bc4a7d56963cf906b99071fd559d781))
+
+### [0.0.1-alpha.53](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.52...v0.0.1-alpha.53) (2024-09-20)
+
 ### [0.0.1-alpha.52](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.51...v0.0.1-alpha.52) (2024-09-20)
 
 
