@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.57](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.56...v0.0.1-alpha.57) (2024-09-22)
+
+
+### Bug Fixes
+
+* wallet sig verification ([5fc99da](https://github.com/DIG-Network/dig-chia-sdk/commit/5fc99dad2c56a8a5fb51ffb74e41508d4c992ab6))
+
 ### [0.0.1-alpha.56](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.55...v0.0.1-alpha.56) (2024-09-22)
 
 
