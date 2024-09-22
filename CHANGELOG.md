@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.55](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.54...v0.0.1-alpha.55) (2024-09-22)
+
+
+### Bug Fixes
+
+* replace chalk with colorette ([5d3bc2c](https://github.com/DIG-Network/dig-chia-sdk/commit/5d3bc2c218d5885660707dd4b1b7b27913e49202))
+
 ### [0.0.1-alpha.54](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.53...v0.0.1-alpha.54) (2024-09-22)
 
 
