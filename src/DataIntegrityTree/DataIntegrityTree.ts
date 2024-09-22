@@ -354,7 +354,7 @@ class DataIntegrityTree {
     };
   }
 
-  static getRootOfForignTree(treeData: { leaves: string[] }): string {
+  static getRootOfForeignTree(treeData: { leaves: string[] }): string {
     const leaves = treeData.leaves.map((leaf: string) =>
       Buffer.from(leaf, "hex")
     );
