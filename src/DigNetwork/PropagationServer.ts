@@ -57,7 +57,7 @@ export class PropagationServer {
    */
   async initializeWallet() {
     this.wallet = await Wallet.load("default");
-    this.publicKey = await this.wallet.getPrivateSyntheticKey();
+    this.publicKey = await this.wallet.getPublicSyntheticKey().toString('hex');
   }
 
   /**
@@ -86,7 +86,7 @@ export class PropagationServer {
         httpsAgent: this.createHttpsAgent(),
       };
 
-      let url = `https://${this.ipAddress}:${PropagationServer.port}/stores/${this.storeId}`;
+      let url = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}`;
       if (rootHash) {
         url += `?hasRootHash=${rootHash}`;
       }
@@ -98,9 +98,9 @@ export class PropagationServer {
       const rootHashExists = response.headers["x-has-root-hash"] === "true";
 
       if (storeExists) {
-        spinner.success({ text: green(`Store ${this.storeId} exists!`) });
+        spinner.success({ text: green(`Store ${this.storeId} exists on peer!`) });
       } else {
-        spinner.error({ text: red(`Store ${this.storeId} does not exist.`) });
+        spinner.error({ text: red(`Store ${this.storeId} does not exist. Credentials will be required to push.`) });
       }
 
       if (rootHash) {
@@ -118,7 +118,7 @@ export class PropagationServer {
       return { storeExists, rootHashExists };
     } catch (error: any) {
       spinner.error({ text: red("Error checking if store exists:") });
-      console.error(red(error));
+      console.error(red(error.message));
       throw error;
     }
   }
@@ -158,7 +158,7 @@ export class PropagationServer {
       });
     } catch (error: any) {
       spinner.error({ text: red("Error starting upload session:") });
-      console.error(red(error));
+      console.error(red(error.message));
       throw error;
     }
   }
@@ -177,10 +177,10 @@ export class PropagationServer {
       const nonce = response.headers["x-nonce"];
       console.log(blue(`Nonce received for file ${filename}: ${nonce}`));
       return nonce;
-    } catch (error) {
+    } catch (error: any) {
       console.error(
         red(`Error generating nonce for file ${filename}:`),
-        error
+        error.message
       );
       throw error;
     }
@@ -193,9 +193,10 @@ export class PropagationServer {
   async uploadFile(filePath: string) {
     const filename = path.basename(filePath);
     const nonce = await this.getFileNonce(filename);
-    const keyOwnershipSig = await this.wallet.createKeyOwnershipSignature(
-      nonce
-    );
+    const wallet = await Wallet.load("default");
+    const keyOwnershipSig = await wallet.createKeyOwnershipSignature(nonce);
+    const publicKey = await wallet.getPublicSyntheticKey();
+
 
     const formData = new FormData();
     formData.append("file", fs.createReadStream(filePath));
@@ -214,7 +215,7 @@ export class PropagationServer {
       headers: {
         "Content-Type": "multipart/form-data",
         "x-nonce": nonce,
-        "x-public-key": this.publicKey,
+        "x-public-key": publicKey.toString("hex"),
         "x-key-ownership-sig": keyOwnershipSig,
         ...formData.getHeaders(),
       },
@@ -238,8 +239,8 @@ export class PropagationServer {
       progressBar.stop();
 
       return response.data;
-    } catch (error) {
-      console.error(red(`✖ Error uploading file ${filename}:`), error);
+    } catch (error: any) {
+      console.error(red(`✖ Error uploading file ${filename}:`), error.message);
       progressBar.stop(); // Stop the progress bar in case of error
       throw error;
     }

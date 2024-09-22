@@ -191,7 +191,7 @@ export class Wallet {
     return signature.toString("hex");
   }
 
-  public async verifyKeyOwnershipSignature(
+  public static async verifyKeyOwnershipSignature(
     nonce: string,
     signature: string,
     publicKey: string
