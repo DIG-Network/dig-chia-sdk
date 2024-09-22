@@ -50,10 +50,6 @@ export class DataStore {
   constructor(storeId: string, options?: DataIntegrityTreeOptions) {
     this.storeId = storeId;
 
-    // This will create the manifest file if it doesn't exist
-    // might be a hacky way to do this, but it works for now
-    this.getRootHistory();
-
     let _options: DataIntegrityTreeOptions;
 
     if (options) {
@@ -488,6 +484,13 @@ export class DataStore {
     // Store the root history in the cache
     rootHistoryCache.set(this.storeId, rootHistory);
 
+    return rootHistory;
+  }
+
+  // Generates a fresh manifest file based on the current root history
+  // and what is currently on disk
+  public async generateManifestFile(): Promise<void> {
+    const rootHistory = await this.getRootHistory();
     // Need this for the dataintegrity tree to work properly
     fs.writeFileSync(
       path.join(STORE_PATH, this.storeId, "manifest.dat"),
@@ -496,8 +499,6 @@ export class DataStore {
         .map((root) => root.root_hash)
         .join("\n")
     );
-
-    return rootHistory;
   }
 
   public async getMetaData(): Promise<DataStoreMetadata> {

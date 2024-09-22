@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.61](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.60...v0.0.1-alpha.61) (2024-09-22)
+
+
+### Bug Fixes
+
+* manifest file handling ([faa6b74](https://github.com/DIG-Network/dig-chia-sdk/commit/faa6b74190db9a671ab9a9c876f6fb5666570e1f))
+
+### [0.0.1-alpha.60](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.59...v0.0.1-alpha.60) (2024-09-22)
+
 ### [0.0.1-alpha.59](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.58...v0.0.1-alpha.59) (2024-09-22)
 
 
