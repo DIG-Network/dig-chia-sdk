@@ -12,6 +12,16 @@ import { STORE_PATH } from "../utils/config";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { createSpinner } from "nanospinner";
 
+// Helper function to trim long filenames with ellipsis and ensure consistent padding
+function formatFilename(filename: string, maxLength = 30): string {
+  if (filename.length > maxLength) {
+    // Trim the filename and add ellipsis
+    return `...${filename.slice(-(maxLength - 3))}`.padEnd(maxLength, " ");
+  }
+  // For shorter filenames, just pad to the maxLength
+  return filename.padEnd(maxLength, " ");
+}
+
 export class PropagationServer {
   storeId: string;
   sessionId: string;
@@ -25,17 +35,43 @@ export class PropagationServer {
 
   private static readonly port = 4159; // Static port used for all requests
 
-  // MultiBar for handling multiple progress bars
+  // Adjust cliProgress settings to align output properly and handle potential undefined values
+  // MultiBar for handling multiple progress bars with green progress and margin between bars
   private static multiBar = new cliProgress.MultiBar(
     {
       clearOnComplete: false,
       hideCursor: true,
-      format:
-        green(" {bar} ") +
-        cyan(" | {filename} | {percentage}% | {value}/{total} bytes"),
-      barsize: 40,
+      format: (options, params, payload) => {
+        // Bar length and padding settings
+        const barCompleteChar = green(options.barCompleteChar || "="); // Green bar for completed portion
+        const barIncompleteChar = options.barIncompleteChar || "-"; // Default incomplete character
+        const barSize = options.barsize || 40; // Default size of the bar
+
+        // Calculate the bar progress
+        const progressBar = `${barCompleteChar.repeat(
+          Math.round(params.progress * barSize)
+        )}${barIncompleteChar.repeat(
+          barSize - Math.round(params.progress * barSize)
+        )}`;
+
+        // Calculate the percentage manually
+        const percentage = Math.round((params.value / params.total) * 100);
+
+        // Format the filename to a fixed length
+        const formattedFilename = formatFilename(payload.filename, 30); // Trim to max 30 chars
+
+        // Padding the filename, percentage, and size
+        const percentageStr = `${percentage}%`.padEnd(4); // Ensure percentage is always 7 characters wide
+        const size = `${params.value}/${params.total} bytes`.padEnd(20); // Ensure size is always 20 characters wide
+
+        // Return the complete formatted progress bar with padding
+        return `${progressBar} | ${formattedFilename.padEnd(
+          35
+        )} | ${percentageStr} | ${size}`;
+      },
       stopOnComplete: true,
-      align: "center",
+      barsize: 40,
+      align: "left",
     },
     cliProgress.Presets.shades_classic
   );
@@ -57,7 +93,7 @@ export class PropagationServer {
    */
   async initializeWallet() {
     this.wallet = await Wallet.load("default");
-    this.publicKey = await this.wallet.getPublicSyntheticKey().toString('hex');
+    this.publicKey = await this.wallet.getPublicSyntheticKey().toString("hex");
   }
 
   /**
@@ -80,7 +116,9 @@ export class PropagationServer {
   async checkStoreExists(
     rootHash?: string
   ): Promise<{ storeExists: boolean; rootHashExists: boolean }> {
-    const spinner = createSpinner(`Checking if store ${this.storeId} exists...`).start();
+    const spinner = createSpinner(
+      `Checking if store ${this.storeId} exists...`
+    ).start();
     try {
       const config: AxiosRequestConfig = {
         httpsAgent: this.createHttpsAgent(),
@@ -98,21 +136,15 @@ export class PropagationServer {
       const rootHashExists = response.headers["x-has-root-hash"] === "true";
 
       if (storeExists) {
-        spinner.success({ text: green(`Store ${this.storeId} exists on peer!`) });
+        spinner.success({
+          text: green(`Store ${this.storeId} exists on peer!`),
+        });
       } else {
-        spinner.error({ text: red(`Store ${this.storeId} does not exist. Credentials will be required to push.`) });
-      }
-
-      if (rootHash) {
-        if (rootHashExists) {
-          console.log(
-            green(`Root hash ${rootHash} exists in the store.`)
-          );
-        } else {
-          console.log(
-            red(`Root hash ${rootHash} does not exist in the store.`)
-          );
-        }
+        spinner.error({
+          text: red(
+            `Store ${this.storeId} does not exist. Credentials will be required to push.`
+          ),
+        });
       }
 
       return { storeExists, rootHashExists };
@@ -124,18 +156,41 @@ export class PropagationServer {
   }
 
   /**
-   * Start an upload session by sending a POST request to the server.
+   * Start an upload session by sending a POST request with the rootHash.dat file.
+   *
+   * @param {string} rootHash - The root hash used to name the .dat file.
+   * @param {string} datFilePath - The full path to the rootHash.dat file.
    */
-  async startUploadSession() {
+  async startUploadSession(rootHash: string) {
     const spinner = createSpinner(
       `Starting upload session for store ${this.storeId}...`
     ).start();
+
     try {
+      const formData = new FormData();
+      const datFilePath = path.join(
+        STORE_PATH,
+        this.storeId,
+        `${rootHash}.dat`
+      );
+
+      // Ensure the rootHash.dat file exists
+      if (!fs.existsSync(datFilePath)) {
+        throw new Error(`File not found: ${datFilePath}`);
+      }
+
+      formData.append("file", fs.createReadStream(datFilePath), {
+        filename: `${rootHash}.dat`,
+      });
+
       const config: AxiosRequestConfig = {
         httpsAgent: this.createHttpsAgent(),
+        headers: {
+          ...formData.getHeaders(),
+        },
       };
 
-      // Add Basic Auth headers if credentials are provided
+      // Add Basic Auth if username and password are present
       if (this.username && this.password) {
         config.auth = {
           username: this.username,
@@ -143,12 +198,8 @@ export class PropagationServer {
         };
       }
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}`;
-      const response = await axios.post(
-        url,
-        { publicKey: this.publicKey },
-        config
-      );
+      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}?roothash=${rootHash}`;
+      const response = await axios.post(url, formData, config);
 
       this.sessionId = response.data.sessionId;
       spinner.success({
@@ -165,8 +216,11 @@ export class PropagationServer {
 
   /**
    * Request a nonce for a file by sending a HEAD request to the server.
+   * Checks if the file already exists based on the 'x-file-exists' header.
    */
-  async getFileNonce(filename: string): Promise<string> {
+  async getFileNonce(
+    filename: string
+  ): Promise<{ nonce: string; fileExists: boolean }> {
     try {
       const config: AxiosRequestConfig = {
         httpsAgent: this.createHttpsAgent(),
@@ -174,9 +228,14 @@ export class PropagationServer {
 
       const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
       const response = await axios.head(url, config);
+
+      // Check for 'x-file-exists' header
+      const fileExists = response.headers["x-file-exists"] === "true";
+
+      // If file exists, no need to generate a nonce
       const nonce = response.headers["x-nonce"];
-      console.log(blue(`Nonce received for file ${filename}: ${nonce}`));
-      return nonce;
+
+      return { nonce, fileExists };
     } catch (error: any) {
       console.error(
         red(`Error generating nonce for file ${filename}:`),
@@ -190,13 +249,19 @@ export class PropagationServer {
    * Upload a file to the server by sending a PUT request.
    * Logs progress using cli-progress for each file.
    */
-  async uploadFile(filePath: string) {
-    const filename = path.basename(filePath);
-    const nonce = await this.getFileNonce(filename);
+  async uploadFile(label: string, dataPath: string) {
+    const filePath = path.join(STORE_PATH, this.storeId, dataPath);
+
+    const { nonce, fileExists } = await this.getFileNonce(dataPath);
+
+    if (fileExists) {
+      console.log(blue(`File ${label} already exists. Skipping upload.`));
+      return;
+    }
+
     const wallet = await Wallet.load("default");
     const keyOwnershipSig = await wallet.createKeyOwnershipSignature(nonce);
     const publicKey = await wallet.getPublicSyntheticKey();
-
 
     const formData = new FormData();
     formData.append("file", fs.createReadStream(filePath));
@@ -205,7 +270,7 @@ export class PropagationServer {
 
     // Create a new progress bar for each file
     const progressBar = PropagationServer.multiBar.create(fileSize, 0, {
-      filename: yellow(filename),
+      filename: yellow(path.basename(label)),
       percentage: 0,
     });
 
@@ -223,16 +288,17 @@ export class PropagationServer {
 
       // Tracking upload progress and updating the progress bar
       onUploadProgress: (progressEvent: any) => {
-        uploadedBytes += progressEvent.loaded;
-        const percentage = Math.round((uploadedBytes / fileSize) * 100);
+        const uploadedBytes = progressEvent.loaded;
+        const percentage = Math.round(
+          (100 * progressEvent.loaded) / progressEvent.total
+        );
         progressBar.update(uploadedBytes, { percentage });
       },
     };
 
     try {
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
+      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${dataPath}`;
       const response = await axios.put(url, formData, config);
-      console.log(green(`✔ File ${filename} uploaded successfully.`));
 
       // Complete the progress bar
       progressBar.update(fileSize, { percentage: 100 });
@@ -240,8 +306,44 @@ export class PropagationServer {
 
       return response.data;
     } catch (error: any) {
-      console.error(red(`✖ Error uploading file ${filename}:`), error.message);
+      console.error(red(`✖ Error uploading file ${label}:`), error.message);
       progressBar.stop(); // Stop the progress bar in case of error
+      throw error;
+    }
+  }
+
+  /**
+   * Commit the upload session by sending a POST request to the server.
+   * This finalizes the upload and moves files from the temporary session directory to the permanent location.
+   */
+  async commitUploadSession() {
+    const spinner = createSpinner(
+      `Committing upload session for store ${this.storeId}...`
+    ).start();
+
+    try {
+      const config: AxiosRequestConfig = {
+        httpsAgent: this.createHttpsAgent(),
+        auth:
+          this.username && this.password
+            ? {
+                username: this.username,
+                password: this.password,
+              }
+            : undefined,
+      };
+
+      const url = `https://${this.ipAddress}:${PropagationServer.port}/commit/${this.storeId}/${this.sessionId}`;
+      const response = await axios.post(url, {}, config);
+
+      spinner.success({
+        text: green(`Upload session ${this.sessionId} successfully committed.`),
+      });
+
+      return response.data;
+    } catch (error: any) {
+      spinner.error({ text: red("Error committing upload session:") });
+      console.error(red(error.message));
       throw error;
     }
   }
@@ -264,33 +366,41 @@ export class PropagationServer {
     await propagationServer.initializeWallet();
 
     // Check if the store exists
-    const storeExists = await propagationServer.checkStoreExists();
+    const { storeExists, rootHashExists } =
+      await propagationServer.checkStoreExists(rootHash);
 
     // If the store does not exist, prompt for credentials
     if (!storeExists) {
       console.log(
-        red(
-          `Store ${storeId} does not exist. Prompting for credentials...`
-        )
+        red(`Store ${storeId} does not exist. Prompting for credentials...`)
       );
       const credentials = await promptCredentials(propagationServer.ipAddress);
       propagationServer.username = credentials.username;
       propagationServer.password = credentials.password;
     }
 
-    // Start the upload session
-    await propagationServer.startUploadSession();
-
-    const dataStore = DataStore.from(storeId);
-    const filePaths = await dataStore.getFileSetForRootHash(rootHash);
-
-    // Upload each file
-    for (const filePath of filePaths) {
-      await propagationServer.uploadFile(filePath);
+    if (rootHashExists) {
+      console.log(
+        blue(
+          `Root hash ${rootHash} already exists in the store. Skipping upload.`
+        )
+      );
+      return;
     }
 
-    // Stop all progress bars after the files are uploaded
-    PropagationServer.multiBar.stop();
+    // Start the upload session
+    await propagationServer.startUploadSession(rootHash);
+
+    const dataStore = DataStore.from(storeId);
+    const files = await dataStore.getFileSetForRootHash(rootHash);
+
+    // Upload each file
+    for (const file of files) {
+      await propagationServer.uploadFile(file.name, file.path);
+    }
+
+    // Commit the session after all files have been uploaded
+    await propagationServer.commitUploadSession();
 
     console.log(
       green(`✔ All files have been uploaded to DataStore ${storeId}.`)
@@ -397,7 +507,8 @@ export class PropagationServer {
           progressBar.stop();
           console.log(
             green(
-              `✔ File ${dataPath} downloaded successfully to ${downloadPath}.`
+              `
+              File ${dataPath} downloaded successfully to ${downloadPath}.`
             )
           );
           resolve();
@@ -405,10 +516,7 @@ export class PropagationServer {
 
         fileWriteStream.on("error", (error) => {
           progressBar.stop();
-          console.error(
-            red(`✖ Error downloading file ${dataPath}:`),
-            error
-          );
+          console.error(red(`✖ Error downloading file ${dataPath}:`), error);
           reject(error);
         });
       });

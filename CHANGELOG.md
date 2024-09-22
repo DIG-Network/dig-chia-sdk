@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.58](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.57...v0.0.1-alpha.58) (2024-09-22)
+
+
+### Features
+
+* add getRootOfForeignTree to data integrity tree ([cdfffa1](https://github.com/DIG-Network/dig-chia-sdk/commit/cdfffa15937789cbfff4a3c61cdc24c4ab30f4a5))
+* add getRootOfForeignTree to data integrity tree ([d855d95](https://github.com/DIG-Network/dig-chia-sdk/commit/d855d9576829bec3b3780ff86845eeeef71e6794))
+
 ### [0.0.1-alpha.57](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.56...v0.0.1-alpha.57) (2024-09-22)
 
 

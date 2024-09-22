@@ -354,6 +354,14 @@ class DataIntegrityTree {
     };
   }
 
+  static getRootOfForeignTree(treeData: { leaves: string[] }): string {
+    const leaves = treeData.leaves.map((leaf: string) =>
+      Buffer.from(leaf, "hex")
+    );
+    const tree = new MerkleTree(leaves, SHA256, { sortPairs: true });
+    return tree.getRoot().toString("hex");
+  }
+
   /**
    * Deserialize a JSON object to a Merkle tree.
    * @param rootHash - The root hash of the tree.
@@ -738,7 +746,6 @@ class DataIntegrityTree {
       decompressStream.on("end", () => {
         const uncompressedSha256 = hash.digest("hex");
         const isValid = uncompressedSha256 === sha256;
-        console.log(`SHA-256 of uncompressed file: ${uncompressedSha256}`);
 
         if (!isValid) {
           return resolve(false);
@@ -814,7 +821,6 @@ class DataIntegrityTree {
 
       decompressStream.on("end", () => {
         const uncompressedSha256 = hash.digest("hex");
-        console.log(`SHA-256 of uncompressed file: ${uncompressedSha256}`);
 
         if (uncompressedSha256 !== sha256) {
           console.warn(

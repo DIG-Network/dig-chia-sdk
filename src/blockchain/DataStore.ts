@@ -25,7 +25,7 @@ import {
 } from "../utils/config";
 import { selectUnspentCoins, calculateFeeForCoinSpends } from "./coins";
 import { RootHistoryItem, DatFile } from "../types";
-import { green, red } from "colorette"; 
+import { green, red } from "colorette";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
@@ -35,6 +35,10 @@ import { CreateStoreUserInputs } from "../types";
 import { askForStoreDetails } from "../prompts";
 import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
+import NodeCache from "node-cache";
+
+// Initialize the cache with a TTL of 180 seconds (3 minutes)
+const rootHistoryCache = new NodeCache({ stdTTL: 180 });
 
 const stat = promisify(fs.stat);
 const readdir = promisify(fs.readdir);
@@ -446,6 +450,13 @@ export class DataStore {
   }
 
   public async getRootHistory(): Promise<RootHistoryItem[]> {
+    // Check if the root history is cached for this storeId
+    const cachedHistory = rootHistoryCache.get<RootHistoryItem[]>(this.storeId);
+    if (cachedHistory) {
+      return cachedHistory;
+    }
+
+    // Fetch root history from peer if not cached
     const peer = await FullNodePeer.connect();
     const { createdAtHeight, createdAtHash } = await this.getCreationHeight();
 
@@ -461,15 +472,19 @@ export class DataStore {
       return [];
     }
 
-    // TODO: add 3 min cache to thisqwz ~
-
-    return rootHashes.map((rootHash, index) => ({
+    // Build the root history list
+    const rootHistory = rootHashes.map((rootHash, index) => ({
       root_hash: rootHash.toString("hex"),
       timestamp: Number(rootHashesTimestamps?.[index].toString()),
       synced: fs.existsSync(
         path.join(STORE_PATH, this.storeId, `${rootHash.toString("hex")}.dat`)
       ),
     }));
+
+    // Store the root history in the cache
+    rootHistoryCache.set(this.storeId, rootHistory);
+
+    return rootHistory;
   }
 
   public async getMetaData(): Promise<DataStoreMetadata> {
@@ -552,27 +567,40 @@ export class DataStore {
     return updateStoreResponse.newStore;
   }
 
-  public async getFileSetForRootHash(rootHash: string): Promise<string[]> {
+  /**
+   * Retrieve the file set for a given root hash and validate file integrity.
+   *
+   * @param {string} rootHash - The root hash to fetch the file set.
+   * @returns {Promise<{ fileName: string, file: string }[]>} - An array of unique file objects.
+   */
+  public async getFileSetForRootHash(
+    rootHash: string
+  ): Promise<{ name: string; path: string }[]> {
     const datFilePath = path.join(STORE_PATH, this.storeId, `${rootHash}.dat`);
     const datFileContent = JSON.parse(fs.readFileSync(datFilePath, "utf-8"));
+
     const heightDatFilePath = path.join(
       STORE_PATH,
       this.storeId,
       "height.json"
     );
 
-    const filesInvolved: string[] = [];
-    filesInvolved.push(datFilePath);
-    filesInvolved.push(heightDatFilePath);
+    // Use a Set to ensure uniqueness
+    const filesInvolved = new Set<{ name: string; path: string }>();
+
+    filesInvolved.add({
+      name: "height.json",
+      path: "height.json",
+    });
 
     // Iterate over each file and perform an integrity check
     for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {
       const filePath = getFilePathFromSha256(
         datFileContent.files[fileKey].sha256,
-        path.join(STORE_PATH, this.storeId, "data")
+        "data"
       );
 
-      // Perform the integrity check before adding to the file set
+      // Perform the integrity check
       const integrityCheck =
         await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
           fileKey,
@@ -583,11 +611,13 @@ export class DataStore {
         );
 
       if (integrityCheck) {
-        console.log(
-          green(`File ${fileKey} has passed the integrity check.`)
-        );
-        // Add the file to the file set only if the integrity check passes
-        filesInvolved.push(filePath);
+        console.log(green(`✔ File ${fileKey} has passed the integrity check.`));
+
+        // Add the file to the Set
+        filesInvolved.add({
+          name: Buffer.from(fileKey, "hex").toString("utf-8"),
+          path: filePath,
+        });
       } else {
         console.error(red(`File ${fileKey} failed the integrity check.`));
         throw new Error(
@@ -596,6 +626,7 @@ export class DataStore {
       }
     }
 
-    return filesInvolved;
+    // Convert Set to Array and return
+    return Array.from(filesInvolved);
   }
 }
