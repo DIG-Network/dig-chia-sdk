@@ -489,11 +489,14 @@ export class DataStore {
 
   // Generates a fresh manifest file based on the current root history
   // and what is currently on disk
-  public async generateManifestFile(): Promise<void> {
+  public async generateManifestFile(folderPath?: string): Promise<void> {
+    if (!folderPath) {
+      folderPath = path.join(STORE_PATH, this.storeId, "data");
+    }
     const rootHistory = await this.getRootHistory();
     // Need this for the dataintegrity tree to work properly
     fs.writeFileSync(
-      path.join(STORE_PATH, this.storeId, "manifest.dat"),
+      path.join(folderPath, "manifest.dat"),
       rootHistory
         .filter((root) => root.synced)
         .map((root) => root.root_hash)
