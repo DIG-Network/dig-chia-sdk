@@ -8,9 +8,9 @@ import { promptCredentials } from "../utils/credentialsUtils";
 import https from "https";
 import cliProgress from "cli-progress";
 import { green, red, cyan, yellow, blue } from "colorette"; // For colored output
-import ora from "ora"; // For spinners
 import { STORE_PATH } from "../utils/config";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
+import { createSpinner } from "nanospinner";
 
 export class PropagationServer {
   storeId: string;
@@ -80,7 +80,7 @@ export class PropagationServer {
   async checkStoreExists(
     rootHash?: string
   ): Promise<{ storeExists: boolean; rootHashExists: boolean }> {
-    const spinner = ora(`Checking if store ${this.storeId} exists...`).start();
+    const spinner = createSpinner(`Checking if store ${this.storeId} exists...`).start();
     try {
       const config: AxiosRequestConfig = {
         httpsAgent: this.createHttpsAgent(),
@@ -98,9 +98,9 @@ export class PropagationServer {
       const rootHashExists = response.headers["x-has-root-hash"] === "true";
 
       if (storeExists) {
-        spinner.succeed(green(`Store ${this.storeId} exists!`));
+        spinner.success({ text: green(`Store ${this.storeId} exists!`) });
       } else {
-        spinner.fail(red(`Store ${this.storeId} does not exist.`));
+        spinner.error({ text: red(`Store ${this.storeId} does not exist.`) });
       }
 
       if (rootHash) {
@@ -117,7 +117,7 @@ export class PropagationServer {
 
       return { storeExists, rootHashExists };
     } catch (error: any) {
-      spinner.fail(red("Error checking if store exists:"));
+      spinner.error({ text: red("Error checking if store exists:") });
       console.error(red(error));
       throw error;
     }
@@ -127,7 +127,7 @@ export class PropagationServer {
    * Start an upload session by sending a POST request to the server.
    */
   async startUploadSession() {
-    const spinner = ora(
+    const spinner = createSpinner(
       `Starting upload session for store ${this.storeId}...`
     ).start();
     try {
@@ -151,13 +151,13 @@ export class PropagationServer {
       );
 
       this.sessionId = response.data.sessionId;
-      spinner.succeed(
-        green(
+      spinner.success({
+        text: green(
           `Upload session started for DataStore ${this.storeId} with session ID ${this.sessionId}`
-        )
-      );
+        ),
+      });
     } catch (error: any) {
-      spinner.fail(red("Error starting upload session:"));
+      spinner.error({ text: red("Error starting upload session:") });
       console.error(red(error));
       throw error;
     }

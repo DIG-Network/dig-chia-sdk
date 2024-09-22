@@ -46,7 +46,6 @@
     "nanospinner": "^1.1.0",
     "nconf": "^0.12.1",
     "node-cache": "^5.1.2",
-    "ora": "^8.1.0",
     "p-limit": "^6.1.0",
     "superagent": "^10.0.0",
     "unzipper": "^0.12.3"
