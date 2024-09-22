@@ -25,7 +25,7 @@ import {
 } from "../utils/config";
 import { selectUnspentCoins, calculateFeeForCoinSpends } from "./coins";
 import { RootHistoryItem, DatFile } from "../types";
-import { validateFileSha256 } from "../utils";
+import chalk from "chalk";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
@@ -461,10 +461,14 @@ export class DataStore {
       return [];
     }
 
+    // TODO: add 3 min cache to thisqwz ~
+
     return rootHashes.map((rootHash, index) => ({
       root_hash: rootHash.toString("hex"),
       timestamp: Number(rootHashesTimestamps?.[index].toString()),
-      synced: fs.existsSync(`${STORE_PATH}/${this.storeId}/${rootHash}.dat`),
+      synced: fs.existsSync(
+        path.join(STORE_PATH, this.storeId, `${rootHash.toString("hex")}.dat`)
+      ),
     }));
   }
 
@@ -556,26 +560,40 @@ export class DataStore {
       this.storeId,
       "height.json"
     );
-    const manifestFilePath = path.join(
-      STORE_PATH,
-      this.storeId,
-      "manifest.dat"
-    );
 
     const filesInvolved: string[] = [];
-    filesInvolved.push(manifestFilePath);
     filesInvolved.push(datFilePath);
     filesInvolved.push(heightDatFilePath);
 
+    // Iterate over each file and perform an integrity check
     for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {
-      const filepath = path.join(STORE_PATH, this.storeId, "data", fileKey);
-
       const filePath = getFilePathFromSha256(
         datFileContent.files[fileKey].sha256,
         path.join(STORE_PATH, this.storeId, "data")
       );
 
-      filesInvolved.push(filePath);
+      // Perform the integrity check before adding to the file set
+      const integrityCheck =
+        await DataIntegrityTree.validateKeyIntegrityWithForeignTree(
+          fileKey,
+          datFileContent.files[fileKey].sha256,
+          datFileContent,
+          rootHash,
+          path.join(STORE_PATH, this.storeId, "data")
+        );
+
+      if (integrityCheck) {
+        console.log(
+          chalk.green(`File ${fileKey} has passed the integrity check.`)
+        );
+        // Add the file to the file set only if the integrity check passes
+        filesInvolved.push(filePath);
+      } else {
+        console.error(chalk.red(`File ${fileKey} failed the integrity check.`));
+        throw new Error(
+          `Integrity check failed for file: ${fileKey}. Aborting.`
+        );
+      }
     }
 
     return filesInvolved;

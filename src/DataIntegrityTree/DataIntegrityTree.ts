@@ -747,7 +747,7 @@ class DataIntegrityTree {
         const tree = this.deserializeTree(rootHash);
         const combinedHash = crypto
           .createHash("sha256")
-          .update(`${toHex(sha256)}/${sha256}`)
+          .update(sha256)
           .digest("hex");
         const leaf = Buffer.from(combinedHash, "hex");
         const isInTree = tree.getLeafIndex(leaf) !== -1;
