@@ -360,7 +360,7 @@ export class PropagationServer {
     rootHash: string,
     ipAddress: string
   ) {
-    const propagationServer = new PropagationServer(storeId, ipAddress);
+    const propagationServer = new PropagationServer(ipAddress, storeId);
 
     // Initialize wallet
     await propagationServer.initializeWallet();
@@ -575,7 +575,7 @@ export class PropagationServer {
     rootHash: string,
     ipAddress: string
   ) {
-    const propagationServer = new PropagationServer(storeId, ipAddress);
+    const propagationServer = new PropagationServer(ipAddress, storeId);
 
     // Initialize wallet
     await propagationServer.initializeWallet();
