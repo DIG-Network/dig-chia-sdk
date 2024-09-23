@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.71](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.70...v0.0.1-alpha.71) (2024-09-23)
+
+
+### Bug Fixes
+
+* bad propagation server constructor ([305782f](https://github.com/DIG-Network/dig-chia-sdk/commit/305782f03e6c5d99da01efd962a29bf04078155e))
+
 ### [0.0.1-alpha.70](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.69...v0.0.1-alpha.70) (2024-09-23)
 
 
