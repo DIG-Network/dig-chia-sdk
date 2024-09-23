@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.66](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.65...v0.0.1-alpha.66) (2024-09-23)
+
+
+### Bug Fixes
+
+* add rootHash option to datastore.from ([fd68426](https://github.com/DIG-Network/dig-chia-sdk/commit/fd684265e32199df7a8535d8055c6aad610285b0))
+
 ### [0.0.1-alpha.65](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.64...v0.0.1-alpha.65) (2024-09-23)
 
 

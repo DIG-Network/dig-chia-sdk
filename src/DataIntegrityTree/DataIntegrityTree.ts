@@ -94,7 +94,7 @@ class DataIntegrityTree {
 
     if (options.rootHash) {
       if (fs.existsSync(path.join(this.storeDir, `${options.rootHash}.dat`))) {
-        console.log(options)
+        console.log(options);
         this.tree = this.deserializeTree(options.rootHash);
       } else {
         throw new DataLayerError(
@@ -142,7 +142,12 @@ class DataIntegrityTree {
     const manifest = this._loadManifest();
     if (manifest.length > 0) {
       const latestRootHash = manifest[manifest.length - 1];
-      return this.deserializeTree(latestRootHash);
+
+      if (latestRootHash && isHexString(latestRootHash)) {
+        return this.deserializeTree(latestRootHash);
+      }
+
+      return new MerkleTree([], SHA256, { sortPairs: true });
     } else {
       return new MerkleTree([], SHA256, { sortPairs: true });
     }
