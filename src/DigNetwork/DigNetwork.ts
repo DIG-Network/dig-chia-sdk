@@ -59,12 +59,12 @@ export class DigNetwork {
         const digPeer = new DigPeer(peerIp, storeId);
 
         // Try to fetch the head store information
-        const storeResponse = await digPeer.contentServer.headStore({
-          hasRootHash: rootHash,
-        });
+        const { storeExists, rootHashExists} = await digPeer.propagationServer.checkStoreExists(
+          rootHash
+        );
 
         // If the peer has the correct root hash, check if key is required
-        if (storeResponse.headers?.["x-has-roothash"] === "true") {
+        if (storeExists && rootHashExists) {
           console.log(
             `Found Peer at ${peerIp} for storeId: ${storeId}, root hash ${rootHash}`
           );
@@ -75,7 +75,7 @@ export class DigNetwork {
           }
 
           // If key is provided, check if the peer has it
-          const keyResponse = await digPeer.contentServer.headKey(key);
+          const keyResponse = await digPeer.contentServer.headKey(key, rootHash);
           if (keyResponse.headers?.["x-key-exists"] === "true") {
             return digPeer;
           }
