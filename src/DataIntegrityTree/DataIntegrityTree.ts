@@ -142,7 +142,10 @@ class DataIntegrityTree {
     const manifest = this._loadManifest();
     if (manifest.length > 0) {
       const latestRootHash = manifest[manifest.length - 1];
-      return this.deserializeTree(latestRootHash);
+      if (latestRootHash.length === 64) {
+        return this.deserializeTree(latestRootHash);
+      }
+      return new MerkleTree([], SHA256, { sortPairs: true });
     } else {
       return new MerkleTree([], SHA256, { sortPairs: true });
     }
