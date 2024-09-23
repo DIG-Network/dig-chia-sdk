@@ -76,7 +76,7 @@ export class PropagationServer {
     cliProgress.Presets.shades_classic
   );
 
-  constructor(storeId: string, ipAddress: string) {
+  constructor(ipAddress: string, storeId: string) {
     this.storeId = storeId;
     this.sessionId = ""; // Session ID will be set after starting the upload session
     this.publicKey = ""; // Public key will be set after initializing the wallet
@@ -360,7 +360,7 @@ export class PropagationServer {
     rootHash: string,
     ipAddress: string
   ) {
-    const propagationServer = new PropagationServer(storeId, ipAddress);
+    const propagationServer = new PropagationServer(ipAddress, storeId);
 
     // Initialize wallet
     await propagationServer.initializeWallet();
@@ -575,7 +575,7 @@ export class PropagationServer {
     rootHash: string,
     ipAddress: string
   ) {
-    const propagationServer = new PropagationServer(storeId, ipAddress);
+    const propagationServer = new PropagationServer(ipAddress, storeId);
 
     // Initialize wallet
     await propagationServer.initializeWallet();

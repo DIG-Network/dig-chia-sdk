@@ -18,11 +18,6 @@ import {
 import { FullNodePeer } from "../blockchain";
 import { Wallet } from "../blockchain";
 import { selectUnspentCoins } from "../blockchain/coins";
-import { STORE_PATH } from "../utils/config";
-import { promisify } from "util";
-
-const rename = promisify(fs.rename);
-const unlink = promisify(fs.unlink);
 
 export class DigPeer {
   private ipAddress: string;
