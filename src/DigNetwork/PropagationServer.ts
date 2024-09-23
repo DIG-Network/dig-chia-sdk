@@ -417,37 +417,32 @@ export class PropagationServer {
     const config: AxiosRequestConfig = {
       responseType: "arraybuffer", // To store the file content in memory
       httpsAgent: this.createHttpsAgent(),
+      onDownloadProgress: (progressEvent) => {
+        const totalLength = progressEvent.total || 0;
+        const downloadedBytes = progressEvent.loaded;
+
+        // Update progress bar
+        const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
+          dataPath: yellow(dataPath),
+          percentage: 0,
+        });
+
+        progressBar.update(downloadedBytes, {
+          percentage: Math.round((downloadedBytes / totalLength) * 100),
+        });
+
+        if (downloadedBytes === totalLength) {
+          progressBar.update(totalLength, { percentage: 100 });
+          progressBar.stop();
+          console.log(green(`✔ File ${dataPath} fetched successfully.`));
+        }
+      },
     };
 
     const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
 
     try {
       const response = await axios.get(url, config);
-      const totalLength = parseInt(response.headers["content-length"], 10);
-
-      console.log(cyan(`Starting fetch for ${dataPath}...`));
-
-      // Create a progress bar for the download
-      const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-        dataPath: yellow(dataPath),
-        percentage: 0,
-      });
-
-      let downloadedBytes = 0;
-
-      // Track progress of downloading the file
-      response.data.on("data", (chunk: Buffer) => {
-        downloadedBytes += chunk.length;
-        progressBar.update(downloadedBytes, {
-          percentage: Math.round((downloadedBytes / totalLength) * 100),
-        });
-      });
-
-      // Complete the progress bar once done
-      progressBar.update(totalLength, { percentage: 100 });
-      progressBar.stop();
-
-      console.log(green(`✔ File ${dataPath} fetched successfully.`));
 
       // Return the file contents as a Buffer
       return Buffer.from(response.data);
@@ -581,7 +576,8 @@ export class PropagationServer {
     await propagationServer.initializeWallet();
 
     // Check if the store exists
-    const { storeExists, rootHashExists} = await propagationServer.checkStoreExists(rootHash);
+    const { storeExists, rootHashExists } =
+      await propagationServer.checkStoreExists(rootHash);
     if (!storeExists || !rootHashExists) {
       throw new Error(`Store ${storeId} does not exist.`);
     }
