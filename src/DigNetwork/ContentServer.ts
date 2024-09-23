@@ -73,16 +73,29 @@ export class ContentServer {
   }
 
   // Method to get the index of keys in a store
-  public async getKeysIndex(): Promise<any> {
-    const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
+  public async getKeysIndex(rootHash?: string): Promise<any> {
+    let udi = `chia.${this.storeId}`;
+
+    if (rootHash) {
+      udi += `.${rootHash}`;
+    }
+
+    const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}`;
     return this.fetchJson(url);
   }
 
   // Method to check if a specific key exists (HEAD request)
   public async headKey(
-    key: string
+    key: string,
+    rootHash?: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
-    const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
+    let udi = `chia.${this.storeId}`;
+
+    if (rootHash) {
+      udi += `.${rootHash}`;
+    }
+
+    const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}/${key}`;
     return this.head(url);
   }
 
@@ -91,7 +104,7 @@ export class ContentServer {
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
-    let url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}`;
+    let url = `https://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}`;
 
     if (options?.hasRootHash) {
       url += `?hasRootHash=${options.hasRootHash}`;
@@ -110,9 +123,15 @@ export class ContentServer {
     return false;
   }
 
-  public streamKey(key: string): Promise<Readable> {
+  public streamKey(key: string, rootHash?: string): Promise<Readable> {
+    let udi = `chia.${this.storeId}`;
+
+    if (rootHash) {
+      udi += `.${rootHash}`;
+    }
+
     return new Promise((resolve, reject) => {
-      const url = `https://${this.ipAddress}:${ContentServer.port}/${this.storeId}/${key}`;
+      const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}/${key}`;
       const urlObj = new URL(url);
 
       const requestOptions = {

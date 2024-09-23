@@ -458,6 +458,44 @@ export class PropagationServer {
   }
 
   /**
+   * Get details of a file, including whether it exists and its size.
+   * Makes a HEAD request to the server and checks the response headers.
+   *
+   * @param {string} dataPath - The path of the file within the DataStore.
+   * @param {string} rootHash - The root hash associated with the DataStore.
+   * @returns {Promise<{ exists: boolean; size: number }>} - An object containing file existence and size information.
+   */
+  async getFileDetails(
+    dataPath: string,
+    rootHash: string
+  ): Promise<{ exists: boolean; size: number }> {
+    try {
+      const config: AxiosRequestConfig = {
+        httpsAgent: this.createHttpsAgent(),
+      };
+
+      // Construct the URL for the HEAD request to check file details
+      const url = `https://${this.ipAddress}:${PropagationServer.port}/store/${this.storeId}/${rootHash}/${dataPath}`;
+      const response = await axios.head(url, config);
+
+      // Check the headers for file existence and size
+      const fileExists = response.headers["x-file-exists"] === "true";
+      const fileSize = parseInt(response.headers["x-file-size"], 10);
+
+      return {
+        exists: fileExists,
+        size: fileExists ? fileSize : 0, // Return 0 size if file doesn't exist
+      };
+    } catch (error: any) {
+      console.error(
+        red(`✖ Error checking file details for ${dataPath}:`),
+        error.message
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Download a file from the server by sending a GET request.
    * Logs progress using cli-progress.
    * @param {string} dataPath - The data path of the file to download.
@@ -543,8 +581,8 @@ export class PropagationServer {
     await propagationServer.initializeWallet();
 
     // Check if the store exists
-    const storeExists = await propagationServer.checkStoreExists();
-    if (!storeExists) {
+    const { storeExists, rootHashExists} = await propagationServer.checkStoreExists(rootHash);
+    if (!storeExists || !rootHashExists) {
       throw new Error(`Store ${storeId} does not exist.`);
     }
 
