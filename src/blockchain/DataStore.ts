@@ -98,12 +98,17 @@ export class DataStore {
     return new DataStore(parsed.storeId);
   }
 
-  public static from(storeId: string | Buffer): DataStore {
+  public static from(storeId: string | Buffer, rootHash?: string): DataStore {
     const existingTreeOptions: DataIntegrityTreeOptions = {
       storageMode: "local",
       storeDir: STORE_PATH,
       disableInitialize: true,
     };
+
+    if (rootHash) {
+      existingTreeOptions.rootHash = rootHash;
+    }
+
     if (storeId instanceof Buffer) {
       return new DataStore(storeId.toString("hex"), existingTreeOptions);
     }
