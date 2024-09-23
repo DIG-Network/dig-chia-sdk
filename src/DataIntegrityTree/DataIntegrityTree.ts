@@ -93,8 +93,7 @@ class DataIntegrityTree {
     this.files = new Map();
 
     if (options.rootHash) {
-      const manifest = this._loadManifest();
-      if (manifest.includes(options.rootHash)) {
+      if (fs.existsSync(path.join(this.storeDir, `${options.rootHash}.dat`))) {
         this.tree = this.deserializeTree(options.rootHash);
       } else {
         throw new DataLayerError(
