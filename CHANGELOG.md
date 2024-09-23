@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.68](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.67...v0.0.1-alpha.68) (2024-09-23)
+
+
+### Features
+
+* add download from propagation server methods ([e2e482a](https://github.com/DIG-Network/dig-chia-sdk/commit/e2e482a9b4544d91545e76850fbf36f655f2ef78))
+
 ### [0.0.1-alpha.67](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.66...v0.0.1-alpha.67) (2024-09-23)
 
 
