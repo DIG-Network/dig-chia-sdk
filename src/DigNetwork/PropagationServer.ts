@@ -581,8 +581,8 @@ export class PropagationServer {
     await propagationServer.initializeWallet();
 
     // Check if the store exists
-    const storeExists = await propagationServer.checkStoreExists(rootHash);
-    if (!storeExists) {
+    const { storeExists, rootHashExists} = await propagationServer.checkStoreExists(rootHash);
+    if (!storeExists || !rootHashExists) {
       throw new Error(`Store ${storeId} does not exist.`);
     }
 
