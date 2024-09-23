@@ -76,7 +76,7 @@ export class PropagationServer {
     cliProgress.Presets.shades_classic
   );
 
-  constructor(storeId: string, ipAddress: string) {
+  constructor(ipAddress: string, storeId: string) {
     this.storeId = storeId;
     this.sessionId = ""; // Session ID will be set after starting the upload session
     this.publicKey = ""; // Public key will be set after initializing the wallet
