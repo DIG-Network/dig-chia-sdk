@@ -13,7 +13,11 @@ import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { createSpinner } from "nanospinner";
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
-function formatFilename(filename: string, maxLength = 30): string {
+function formatFilename(filename: string | undefined, maxLength = 30): string {
+  if (!filename) {
+    return "Unknown File".padEnd(maxLength, " "); // Provide a fallback value if filename is undefined
+  }
+
   if (filename.length > maxLength) {
     // Trim the filename and add ellipsis
     return `...${filename.slice(-(maxLength - 3))}`.padEnd(maxLength, " ");
@@ -414,6 +418,7 @@ export class PropagationServer {
    * @returns {Promise<Buffer>} - The file content in memory as a Buffer.
    */
   async fetchFile(dataPath: string): Promise<Buffer> {
+    console.log(cyan(`Fetching file ${dataPath}...`));
     const config: AxiosRequestConfig = {
       responseType: "arraybuffer", // To store the file content in memory
       httpsAgent: this.createHttpsAgent(),
@@ -423,7 +428,9 @@ export class PropagationServer {
 
         // Update progress bar
         const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-          dataPath: yellow(dataPath),
+          filename: yellow(
+            dataPath.replace("data", "").replace(/\\/g, "").replace(/\//g, "")
+          ),
           percentage: 0,
         });
 
@@ -493,9 +500,10 @@ export class PropagationServer {
   /**
    * Download a file from the server by sending a GET request.
    * Logs progress using cli-progress.
+   * @param {string} label - human readable key name.
    * @param {string} dataPath - The data path of the file to download.
    */
-  async downloadFile(dataPath: string) {
+  async downloadFile(label: string, dataPath: string) {
     const config: AxiosRequestConfig = {
       responseType: "stream", // Make sure the response is streamed
       httpsAgent: this.createHttpsAgent(),
@@ -513,11 +521,9 @@ export class PropagationServer {
       const response = await axios.get(url, config);
       const totalLength = parseInt(response.headers["content-length"], 10);
 
-      console.log(cyan(`Starting download for ${dataPath}...`));
-
       // Create a progress bar for the download
       const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-        dataPath: yellow(dataPath),
+        filename: yellow(label),
         percentage: 0,
       });
 
@@ -538,12 +544,6 @@ export class PropagationServer {
         fileWriteStream.on("finish", () => {
           progressBar.update(totalLength, { percentage: 100 });
           progressBar.stop();
-          console.log(
-            green(
-              `
-              File ${dataPath} downloaded successfully to ${downloadPath}.`
-            )
-          );
           resolve();
         });
 
@@ -582,7 +582,7 @@ export class PropagationServer {
       throw new Error(`Store ${storeId} does not exist.`);
     }
 
-    await propagationServer.downloadFile("height.json");
+    await propagationServer.downloadFile("height.json", "height.json");
     const datFileContent = await propagationServer.fetchFile(`${rootHash}.dat`);
     const root = JSON.parse(datFileContent.toString());
 
@@ -592,8 +592,16 @@ export class PropagationServer {
         "data"
       );
 
-      await propagationServer.downloadFile(dataPath);
+      await propagationServer.downloadFile(
+        Buffer.from(fileKey, 'hex').toString("utf-8"),
+        dataPath
+      );
     }
+
+    fs.writeFileSync(
+      path.join(STORE_PATH, storeId, `${rootHash}.dat`),
+      datFileContent
+    );
 
     const dataStore = DataStore.from(storeId);
     await dataStore.generateManifestFile();
