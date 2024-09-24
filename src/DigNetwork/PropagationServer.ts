@@ -8,11 +8,12 @@ import { getOrCreateSSLCerts } from "../utils/ssl";
 import { promptCredentials } from "../utils/credentialsUtils";
 import https from "https";
 import cliProgress from "cli-progress";
-import { green, red, blue, yellow } from "colorette";
+import { green, red, blue, yellow, cyan } from "colorette";
 import { STORE_PATH } from "../utils/config";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { createSpinner } from "nanospinner";
 import ProgressStream from "progress-stream";
+import { PassThrough } from "stream";
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -56,9 +57,9 @@ export class PropagationServer {
    */
   async initializeWallet() {
     this.wallet = await Wallet.load("default");
-    this.publicKey = (
-      await this.wallet.getPublicSyntheticKey()
-    ).toString("hex");
+    this.publicKey = (await this.wallet.getPublicSyntheticKey()).toString(
+      "hex"
+    );
   }
 
   /**
@@ -99,12 +100,14 @@ export class PropagationServer {
 
       if (storeExists) {
         spinner.success({
-          text: green(`Store ${this.storeId} exists on peer!`),
+          text: green(
+            `Store ${this.storeId} exists on peer: ${this.ipAddress}`
+          ),
         });
       } else {
         spinner.error({
-          text: red(
-            `Store ${this.storeId} does not exist. Credentials will be required to push.`
+          text: yellow(
+            `Store ${this.storeId} does not exist on ${this.ipAddress}. Credentials will be required to push.`
           ),
         });
       }
@@ -127,7 +130,11 @@ export class PropagationServer {
 
     try {
       const formData = new FormData();
-      const datFilePath = path.join(STORE_PATH, this.storeId, `${rootHash}.dat`);
+      const datFilePath = path.join(
+        STORE_PATH,
+        this.storeId,
+        `${rootHash}.dat`
+      );
 
       // Ensure the rootHash.dat file exists
       if (!fs.existsSync(datFilePath)) {
@@ -159,7 +166,7 @@ export class PropagationServer {
       this.sessionId = response.data.sessionId;
       spinner.success({
         text: green(
-          `Upload session started for DataStore ${this.storeId} with session ID ${this.sessionId}`
+          `Upload session started for Root Hash: ${cyan(rootHash)} with session ID ${this.sessionId}`
         ),
       });
     } catch (error: any) {
@@ -226,7 +233,9 @@ export class PropagationServer {
       // Create a new progress bar for the file
       progressBar = new cliProgress.SingleBar(
         {
-          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          format: `${blue("[{bar}]")} | ${yellow(
+            "{filename}"
+          )} | {percentage}% | {value}/{total} bytes`,
           hideCursor: true,
           barsize: 30,
           align: "left",
@@ -239,8 +248,11 @@ export class PropagationServer {
       );
 
       progressBar.start(fileSize, 0, {
-        filename: formatFilename(path.basename(label)),
+        filename: formatFilename(label),
       });
+
+      // Create the read stream
+      const fileReadStream = fs.createReadStream(filePath);
 
       // Create a progress stream
       const progressStream = ProgressStream({
@@ -252,14 +264,15 @@ export class PropagationServer {
         progressBar!.update(progress.transferred);
       });
 
-      // Create a read stream and pipe it through the progress stream
-      const fileReadStream = fs
-        .createReadStream(filePath)
-        .pipe(progressStream);
+      // Create a PassThrough stream
+      const passThroughStream = new PassThrough();
+
+      // Pipe the read stream through the progress stream into the PassThrough stream
+      fileReadStream.pipe(progressStream).pipe(passThroughStream);
 
       // Use form-data to construct the request body
       const formData = new FormData();
-      formData.append("file", fileReadStream);
+      formData.append("file", passThroughStream);
 
       const headers = {
         ...formData.getHeaders(),
@@ -276,13 +289,18 @@ export class PropagationServer {
       };
 
       const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${dataPath}`;
-      const response = await axios.put(url, formData, config);
 
-      // Wait for the progress stream to finish
-      await new Promise<void>((resolve, reject) => {
+      // Create a promise that resolves when the progress stream ends
+      const progressPromise = new Promise<void>((resolve, reject) => {
         progressStream.on("end", resolve);
         progressStream.on("error", reject);
       });
+
+      // Start the upload request
+      const uploadPromise = axios.put(url, formData, config);
+
+      // Wait for both the upload and the progress stream to finish
+      await Promise.all([uploadPromise, progressPromise]);
     } catch (error: any) {
       throw error;
     } finally {
@@ -376,7 +394,7 @@ export class PropagationServer {
     }));
 
     // Limit the number of concurrent uploads
-    const concurrencyLimit = 3; // Adjust this number as needed
+    const concurrencyLimit = 10; // Adjust this number as needed
 
     // Import asyncPool from your utilities
     const { asyncPool } = await import("../utils/asyncPool");
@@ -389,7 +407,7 @@ export class PropagationServer {
     await propagationServer.commitUploadSession();
 
     console.log(
-      green(`✔ All files have been uploaded to DataStore ${storeId}.`)
+      green(`✔ All files have been uploaded to for Root Hash: ${cyan(rootHash)}.`)
     );
   }
 
@@ -420,7 +438,9 @@ export class PropagationServer {
       // Create a new progress bar for the file
       progressBar = new cliProgress.SingleBar(
         {
-          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          format: `${blue("[{bar}]")} | ${yellow(
+            "{filename}"
+          )} | {percentage}% | {value}/{total} bytes`,
           hideCursor: true,
           barsize: 30,
           align: "left",
@@ -533,7 +553,9 @@ export class PropagationServer {
       // Create a new progress bar for the file
       progressBar = new cliProgress.SingleBar(
         {
-          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          format: `${blue("[{bar}]")} | ${yellow(
+            "{filename}"
+          )} | {percentage}% | {value}/{total} bytes`,
           hideCursor: true,
           barsize: 30,
           align: "left",
@@ -603,19 +625,14 @@ export class PropagationServer {
     }
 
     // Fetch the rootHash.dat file
-    const datFileContent = await propagationServer.fetchFile(
-      `${rootHash}.dat`
-    );
+    const datFileContent = await propagationServer.fetchFile(`${rootHash}.dat`);
     const root = JSON.parse(datFileContent.toString());
 
     // Prepare download tasks
     const downloadTasks = [];
 
     for (const [fileKey, fileData] of Object.entries(root.files)) {
-      const dataPath = getFilePathFromSha256(
-        (fileData as any).sha256,
-        "data"
-      );
+      const dataPath = getFilePathFromSha256((fileData as any).sha256, "data");
 
       const label = Buffer.from(fileKey, "hex").toString("utf-8");
 
@@ -623,7 +640,7 @@ export class PropagationServer {
     }
 
     // Limit the number of concurrent downloads
-    const concurrencyLimit = 5; // Adjust this number as needed
+    const concurrencyLimit = 10; // Adjust this number as needed
 
     // Import asyncPool from your utilities
     const { asyncPool } = await import("../utils/asyncPool");

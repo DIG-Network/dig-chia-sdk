@@ -36,6 +36,7 @@ import { askForStoreDetails } from "../prompts";
 import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import NodeCache from "node-cache";
+import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
 const rootHistoryCache = new NodeCache({ stdTTL: 180 });
@@ -413,13 +414,34 @@ export class DataStore {
     }
   }
 
+  public async cacheStoreCreationHeight(
+    storeId: string
+  ): Promise<{ createdAtHeight: number; createdAtHash: Buffer }> {
+    const peer = await FullNodePeer.connect();
+    const createdAtHeight = await peer.getStoreCreationHeight(
+      Buffer.from(storeId, "hex"),
+      null,
+      Buffer.from(MAIN_NET_GENISES_CHALLENGE, "hex")
+    );
+    const createdAtHash = await peer.getHeaderHash(Number(createdAtHeight));
+
+    // Initialize the FileCache for the height file
+    const fileCache = new FileCache<{ height: number; hash: string }>(
+      `stores/${this.storeId}`
+    );
+
+    fileCache.set("height", {
+      height: Number(createdAtHeight),
+      hash: createdAtHash.toString("hex"),
+    });
+
+    return { createdAtHeight: Number(createdAtHeight), createdAtHash };
+  }
+
   public async getCreationHeight(): Promise<{
     createdAtHeight: number;
     createdAtHash: Buffer;
   }> {
-    const defaultHeight = MIN_HEIGHT;
-    const defaultHash = Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex");
-
     // Initialize the FileCache for the height file
     const fileCache = new FileCache<{ height: number; hash: string }>(
       `stores/${this.storeId}`
@@ -429,16 +451,19 @@ export class DataStore {
     const cachedHeightInfo = fileCache.get("height");
 
     if (!cachedHeightInfo) {
-      // If no cache, return the default values
-      return { createdAtHeight: defaultHeight, createdAtHash: defaultHash };
+      // If no cache, regenerate the cache
+      return this.cacheStoreCreationHeight(this.storeId);
     }
 
     // Parse the cached height and hash values
     const { height, hash } = cachedHeightInfo;
 
+    const defaultHeight = MIN_HEIGHT;
+    const defaultHash = Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex");
+
     return {
       createdAtHeight: height || defaultHeight,
-      createdAtHash: Buffer.from(hash || MIN_HEIGHT_HEADER_HASH, "hex"),
+      createdAtHash: hash ? Buffer.from(hash, "hex") : defaultHash,
     };
   }
 
@@ -622,8 +647,6 @@ export class DataStore {
         );
 
       if (integrityCheck) {
-        console.log(green(`✔ File ${fileKey} has passed the integrity check.`));
-
         // Add the file to the Set
         filesInvolved.add({
           name: Buffer.from(fileKey, "hex").toString("utf-8"),
