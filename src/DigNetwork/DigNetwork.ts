@@ -1,13 +1,10 @@
 import * as fs from "fs";
 import * as path from "path";
-import { MultiBar, Presets } from "cli-progress";
 import { DigPeer } from "./DigPeer";
-import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
 import { RootHistoryItem } from "../types";
 import { promisify } from "util";
-import { DataIntegrityTree } from "../DataIntegrityTree";
 
 const rename = promisify(fs.rename);
 const unlink = promisify(fs.unlink);
@@ -146,9 +143,10 @@ export class DigNetwork {
 
             if (!selectedPeer) {
               console.error(
-                `No peer found with root hash ${rootInfo.root_hash}. Skipping download.`
+                `No peer found with root hash ${rootInfo.root_hash}. Abort download.`
               );
-              break; // Exit loop if no more peers are found
+              
+              throw new Error("No peer found with root hash.");
             }
 
             // Ensure the selected peer has the store by checking with a HEAD request

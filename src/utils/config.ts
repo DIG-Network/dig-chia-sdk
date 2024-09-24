@@ -8,6 +8,8 @@ import os from "os";
 export const NETWORK_AGG_SIG_DATA =
   "ccd5bb71183532bff220ba46c268991a3ff07eb358e8255a65c30a2dce0e5fbb";
 
+export const MAIN_NET_GENISES_CHALLENGE = NETWORK_AGG_SIG_DATA;
+
 export const MIN_HEIGHT = 5777842;
 export const MIN_HEIGHT_HEADER_HASH =
   "b29a4daac2434fd17a36e15ba1aac5d65012d4a66f99bed0bf2b5342e92e562c";

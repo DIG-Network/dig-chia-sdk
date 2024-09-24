@@ -17,7 +17,6 @@ export const getPublicIpAddress = async (): Promise<string | undefined> => {
     try {
       const response = await superagent.get('https://api.datalayer.storage/user/v1/get_user_ip');
       if (response.body && response.body.success) {
-        console.log('Public IP address:', response.body);
         return response.body.ip_address;
       } else {
         throw new Error('Failed to retrieve public IP address');
