@@ -425,15 +425,7 @@ export class DataStore {
     );
     const createdAtHash = await peer.getHeaderHash(Number(createdAtHeight));
 
-    // Initialize the FileCache for the height file
-    const fileCache = new FileCache<{ height: number; hash: string }>(
-      `stores/${this.storeId}`
-    );
-
-    fileCache.set("height", {
-      height: Number(createdAtHeight),
-      hash: createdAtHash.toString("hex"),
-    });
+    await this.setCreationHeight(Number(createdAtHeight), createdAtHash);
 
     return { createdAtHeight: Number(createdAtHeight), createdAtHash };
   }
