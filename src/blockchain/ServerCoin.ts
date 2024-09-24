@@ -15,6 +15,7 @@ import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
 import NodeCache from "node-cache";
+import { getPublicIpAddress } from '../utils/network';
 
 const serverCoinCollateral = 300_000_000;
 
@@ -248,6 +249,12 @@ export class ServerCoin {
     sampleSize: number = 5,
     blacklist: string[] = []
   ): Promise<string[]> {
+    // We dont want our own IP to be included
+    const myIp = await getPublicIpAddress();
+    if (myIp) {
+      blacklist.push(myIp);
+    }
+    
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
     if (process.env.DIG_DEBUG === "1") {
       console.log("Server Coin Peers: ", serverCoinPeers);
