@@ -94,7 +94,6 @@ class DataIntegrityTree {
 
     if (options.rootHash) {
       if (fs.existsSync(path.join(this.storeDir, `${options.rootHash}.dat`))) {
-        console.log(options);
         this.tree = this.deserializeTree(options.rootHash);
       } else {
         throw new DataLayerError(

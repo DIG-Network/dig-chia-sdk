@@ -695,7 +695,7 @@ export class PropagationServer {
 
         const downloadPath = path.join(tempDir, storeId, dataPath);
         if (!fs.existsSync(path.join(downloadPath, dataPath))) {
-          throw new Error(`Missing file: ${fileKey}, aborting session.`);
+          throw new Error(`Missing file!: ${Buffer.from(fileKey, "utf-8")}, aborting session.`);
         }
       }
 
