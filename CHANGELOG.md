@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.75](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.74...v0.0.1-alpha.75) (2024-09-24)
+
+
+### Features
+
+* regen store createion height if its missing ([989e6c8](https://github.com/DIG-Network/dig-chia-sdk/commit/989e6c8701bfe137b610176ad40c0d7c7ff89322))
+
 ### [0.0.1-alpha.74](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.73...v0.0.1-alpha.74) (2024-09-24)
 
 
