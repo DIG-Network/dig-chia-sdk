@@ -190,7 +190,6 @@ export class ServerCoin {
     // Check if the result is already cached
     const cachedPeers = serverCoinPeersCache.get<string[]>(cacheKey);
     if (cachedPeers) {
-      console.log('!');
       return cachedPeers;
     }
 
@@ -224,7 +223,6 @@ export class ServerCoin {
 
     // Cache the result
     serverCoinPeersCache.set(cacheKey, peerList);
-    console.log(peerList);
     return peerList;
   }
 
