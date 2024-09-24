@@ -14,6 +14,10 @@ import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { createSpinner } from "nanospinner";
 import ProgressStream from "progress-stream";
 import { PassThrough } from "stream";
+import { asyncPool } from "../utils/asyncPool";
+import fsExtra from "fs-extra";
+import os from "os";
+import { merkleIntegrityCheck } from "../utils/merkle";
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -166,7 +170,9 @@ export class PropagationServer {
       this.sessionId = response.data.sessionId;
       spinner.success({
         text: green(
-          `Upload session started for Root Hash: ${cyan(rootHash)} with session ID ${this.sessionId}`
+          `Upload session started for Root Hash: ${cyan(
+            rootHash
+          )} with session ID ${this.sessionId}`
         ),
       });
     } catch (error: any) {
@@ -396,9 +402,6 @@ export class PropagationServer {
     // Limit the number of concurrent uploads
     const concurrencyLimit = 10; // Adjust this number as needed
 
-    // Import asyncPool from your utilities
-    const { asyncPool } = await import("../utils/asyncPool");
-
     await asyncPool(concurrencyLimit, uploadTasks, async (task) => {
       await propagationServer.uploadFile(task.label, task.dataPath);
     });
@@ -407,7 +410,9 @@ export class PropagationServer {
     await propagationServer.commitUploadSession();
 
     console.log(
-      green(`✔ All files have been uploaded to for Root Hash: ${cyan(rootHash)}.`)
+      green(
+        `✔ All files have been uploaded to for Root Hash: ${cyan(rootHash)}.`
+      )
     );
   }
 
@@ -525,9 +530,14 @@ export class PropagationServer {
    * Download a file from the server by sending a GET request.
    * Logs progress using a local cli-progress bar.
    */
-  async downloadFile(label: string, dataPath: string) {
+  async downloadFile(
+    label: string,
+    dataPath: string,
+    rootHash: string,
+    baseDir: string
+  ) {
     const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
-    const downloadPath = path.join(STORE_PATH, this.storeId, dataPath);
+    let downloadPath = path.join(baseDir, dataPath);
 
     // Ensure that the directory for the file exists
     fs.mkdirSync(path.dirname(downloadPath), { recursive: true });
@@ -595,6 +605,21 @@ export class PropagationServer {
           progressStream.on("error", reject);
         }),
       ]);
+
+      if (dataPath.includes("/data")) {
+        const integrity = await merkleIntegrityCheck(
+          path.join(baseDir, `${rootHash}.dat`),
+          baseDir,
+          dataPath,
+          rootHash
+        );
+
+        if (!integrity) {
+          throw new Error(`Integrity check failed for file: ${dataPath}`);
+        }
+
+        console.log("integrity check");
+      }
     } catch (error) {
       throw error;
     } finally {
@@ -633,31 +658,60 @@ export class PropagationServer {
 
     for (const [fileKey, fileData] of Object.entries(root.files)) {
       const dataPath = getFilePathFromSha256((fileData as any).sha256, "data");
-
       const label = Buffer.from(fileKey, "hex").toString("utf-8");
-
       downloadTasks.push({ label, dataPath });
     }
 
     // Limit the number of concurrent downloads
     const concurrencyLimit = 10; // Adjust this number as needed
 
-    // Import asyncPool from your utilities
-    const { asyncPool } = await import("../utils/asyncPool");
+    // Create a temporary directory
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "downloadStore-"));
 
-    await asyncPool(concurrencyLimit, downloadTasks, async (task) => {
-      await propagationServer.downloadFile(task.label, task.dataPath);
-    });
+    try {
+      // Download files to the temporary directory
+      await asyncPool(concurrencyLimit, downloadTasks, async (task) => {
+        await propagationServer.downloadFile(
+          task.label,
+          task.dataPath,
+          rootHash,
+          path.join(tempDir, storeId)
+        );
+      });
 
-    // Save the rootHash.dat file
-    fs.writeFileSync(
-      path.join(STORE_PATH, storeId, `${rootHash}.dat`),
-      datFileContent
-    );
+      // Save the rootHash.dat file to the temporary directory
+      fs.writeFileSync(
+        path.join(tempDir, storeId, `${rootHash}.dat`),
+        datFileContent
+      );
 
-    const dataStore = DataStore.from(storeId);
-    await dataStore.generateManifestFile();
+      // Integrity check for the downloaded files was done during the download
+      // Here we want to make sure we got all the files or we reject the download session
+      for (const [fileKey, fileData] of Object.entries(root.files)) {
+        const dataPath = getFilePathFromSha256(
+          (fileData as any).sha256,
+          "data"
+        );
 
-    console.log(green(`✔ All files have been downloaded to ${storeId}.`));
+        const downloadPath = path.join(tempDir, storeId, dataPath);
+        if (!fs.existsSync(path.join(downloadPath, dataPath))) {
+          throw new Error(`Missing file: ${fileKey}, aborting session.`);
+        }
+      }
+
+      // After all downloads are complete, copy from temp directory to the main directory
+      const destinationDir = path.join(STORE_PATH, storeId);
+      fsExtra.copySync(path.join(tempDir, storeId), destinationDir);
+
+      // Generate the manifest file in the main directory
+      const dataStore = DataStore.from(storeId);
+      await dataStore.cacheStoreCreationHeight();
+      await dataStore.generateManifestFile();
+
+      console.log(green(`✔ All files have been downloaded to ${storeId}.`));
+    } finally {
+      // Clean up the temporary directory
+      fsExtra.removeSync(tempDir);
+    }
   }
 }

@@ -180,11 +180,10 @@ export class DigPeer {
   }
 
   public async downloadStoreRoot(rootHash: string): Promise<void> {
-    await PropagationServer.downloadStore(this.storeId, rootHash, this.IpAddress);
-  }
-
-
-  public async downloadData(dataPath: string): Promise<void> {
-    await this.propagationServer.downloadFile(dataPath, dataPath);
+    await PropagationServer.downloadStore(
+      this.storeId,
+      rootHash,
+      this.IpAddress
+    );
   }
 }
