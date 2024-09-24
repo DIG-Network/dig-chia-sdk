@@ -424,11 +424,14 @@ export class DataStore {
       null,
       Buffer.from(MAIN_NET_GENISES_CHALLENGE, "hex")
     );
-    const createdAtHash = await peer.getHeaderHash(Number(createdAtHeight));
 
-    await this.setCreationHeight(Number(createdAtHeight), createdAtHash);
+    // Get just before created at height so we can find the coin
+    const justBeforeCreatedAtHeight = Number(createdAtHeight) - 1;
+    const createdAtHash = await peer.getHeaderHash(justBeforeCreatedAtHeight);
 
-    return { createdAtHeight: Number(createdAtHeight), createdAtHash };
+    await this.setCreationHeight(justBeforeCreatedAtHeight, createdAtHash);
+
+    return { createdAtHeight: justBeforeCreatedAtHeight, createdAtHash };
   }
 
   public async getCreationHeight(): Promise<{
