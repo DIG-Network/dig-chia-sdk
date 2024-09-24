@@ -414,12 +414,13 @@ export class DataStore {
     }
   }
 
-  public async cacheStoreCreationHeight(
-    storeId: string
-  ): Promise<{ createdAtHeight: number; createdAtHash: Buffer }> {
+  public async cacheStoreCreationHeight(): Promise<{
+    createdAtHeight: number;
+    createdAtHash: Buffer;
+  }> {
     const peer = await FullNodePeer.connect();
     const createdAtHeight = await peer.getStoreCreationHeight(
-      Buffer.from(storeId, "hex"),
+      Buffer.from(this.storeId, "hex"),
       null,
       Buffer.from(MAIN_NET_GENISES_CHALLENGE, "hex")
     );
