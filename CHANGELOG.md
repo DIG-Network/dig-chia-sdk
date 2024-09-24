@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.78](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.77...v0.0.1-alpha.78) (2024-09-24)
+
+
+### Bug Fixes
+
+* cacheStoreCreationHeight ([b7b301f](https://github.com/DIG-Network/dig-chia-sdk/commit/b7b301feef2f75ea18a88db9a490e076d26695b4))
+
 ### [0.0.1-alpha.77](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.76...v0.0.1-alpha.77) (2024-09-24)
 
 ### [0.0.1-alpha.76](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.75...v0.0.1-alpha.76) (2024-09-24)
