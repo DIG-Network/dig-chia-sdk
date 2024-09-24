@@ -169,8 +169,12 @@ export class DigNetwork {
               continue;
             }
 
-            // Download the store root and associated data
-            await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
+            try {
+              // Download the store root and associated data
+              await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
+            } catch (error) {
+              break;
+            }
 
             // Clear the blacklist upon successful download
             peerBlackList = [];
