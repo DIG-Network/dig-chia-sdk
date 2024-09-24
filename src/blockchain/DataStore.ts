@@ -445,7 +445,7 @@ export class DataStore {
 
     if (!cachedHeightInfo) {
       // If no cache, regenerate the cache
-      return this.cacheStoreCreationHeight(this.storeId);
+      return this.cacheStoreCreationHeight();
     }
 
     // Parse the cached height and hash values
