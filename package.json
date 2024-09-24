@@ -1,6 +1,6 @@
 {
   "name": "@dignetwork/dig-sdk",
-  "version": "0.0.1-alpha.71",
+  "version": "0.0.1-alpha.72",
   "description": "",
   "type": "commonjs",
   "main": "./dist/index.js",
@@ -46,7 +46,7 @@
     "nanospinner": "^1.1.0",
     "nconf": "^0.12.1",
     "node-cache": "^5.1.2",
-    "p-limit": "^6.1.0",
+    "progress-stream": "^2.0.0",
     "superagent": "^10.0.0",
     "unzipper": "^0.12.3"
   },
@@ -61,6 +61,7 @@
     "@types/mocha": "^10.0.7",
     "@types/nconf": "^0.10.7",
     "@types/node": "^22.1.0",
+    "@types/progress-stream": "^2.0.5",
     "@types/superagent": "^8.1.8",
     "@types/unzipper": "^0.10.10",
     "chai": "^5.1.1",

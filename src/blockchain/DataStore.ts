@@ -601,19 +601,8 @@ export class DataStore {
     const datFilePath = path.join(STORE_PATH, this.storeId, `${rootHash}.dat`);
     const datFileContent = JSON.parse(fs.readFileSync(datFilePath, "utf-8"));
 
-    const heightDatFilePath = path.join(
-      STORE_PATH,
-      this.storeId,
-      "height.json"
-    );
-
     // Use a Set to ensure uniqueness
     const filesInvolved = new Set<{ name: string; path: string }>();
-
-    filesInvolved.add({
-      name: "height.json",
-      path: "height.json",
-    });
 
     // Iterate over each file and perform an integrity check
     for (const [fileKey, fileData] of Object.entries(datFileContent.files)) {

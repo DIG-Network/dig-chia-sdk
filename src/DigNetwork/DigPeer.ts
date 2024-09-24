@@ -185,6 +185,6 @@ export class DigPeer {
 
 
   public async downloadData(dataPath: string): Promise<void> {
-    await this.propagationServer.downloadFile(dataPath);
+    await this.propagationServer.downloadFile(dataPath, dataPath);
   }
 }

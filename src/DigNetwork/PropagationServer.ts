@@ -1,3 +1,4 @@
+// Import necessary modules and dependencies
 import axios, { AxiosRequestConfig } from "axios";
 import fs from "fs";
 import path from "path";
@@ -7,18 +8,21 @@ import { getOrCreateSSLCerts } from "../utils/ssl";
 import { promptCredentials } from "../utils/credentialsUtils";
 import https from "https";
 import cliProgress from "cli-progress";
-import { green, red, cyan, yellow, blue } from "colorette"; // For colored output
+import { green, red, blue, yellow } from "colorette";
 import { STORE_PATH } from "../utils/config";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import { createSpinner } from "nanospinner";
+import ProgressStream from "progress-stream";
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
-function formatFilename(filename: string, maxLength = 30): string {
+function formatFilename(filename: string | undefined, maxLength = 30): string {
+  if (!filename) {
+    return "Unknown File".padEnd(maxLength, " ");
+  }
+
   if (filename.length > maxLength) {
-    // Trim the filename and add ellipsis
     return `...${filename.slice(-(maxLength - 3))}`.padEnd(maxLength, " ");
   }
-  // For shorter filenames, just pad to the maxLength
   return filename.padEnd(maxLength, " ");
 }
 
@@ -30,56 +34,15 @@ export class PropagationServer {
   ipAddress: string;
   certPath: string;
   keyPath: string;
-  username: string | undefined; // To store username if needed for credentials
-  password: string | undefined; // To store password if needed for credentials
+  username: string | undefined;
+  password: string | undefined;
 
   private static readonly port = 4159; // Static port used for all requests
 
-  // Adjust cliProgress settings to align output properly and handle potential undefined values
-  // MultiBar for handling multiple progress bars with green progress and margin between bars
-  private static multiBar = new cliProgress.MultiBar(
-    {
-      clearOnComplete: false,
-      hideCursor: true,
-      format: (options, params, payload) => {
-        // Bar length and padding settings
-        const barCompleteChar = green(options.barCompleteChar || "="); // Green bar for completed portion
-        const barIncompleteChar = options.barIncompleteChar || "-"; // Default incomplete character
-        const barSize = options.barsize || 40; // Default size of the bar
-
-        // Calculate the bar progress
-        const progressBar = `${barCompleteChar.repeat(
-          Math.round(params.progress * barSize)
-        )}${barIncompleteChar.repeat(
-          barSize - Math.round(params.progress * barSize)
-        )}`;
-
-        // Calculate the percentage manually
-        const percentage = Math.round((params.value / params.total) * 100);
-
-        // Format the filename to a fixed length
-        const formattedFilename = formatFilename(payload.filename, 30); // Trim to max 30 chars
-
-        // Padding the filename, percentage, and size
-        const percentageStr = `${percentage}%`.padEnd(4); // Ensure percentage is always 7 characters wide
-        const size = `${params.value}/${params.total} bytes`.padEnd(20); // Ensure size is always 20 characters wide
-
-        // Return the complete formatted progress bar with padding
-        return `${progressBar} | ${formattedFilename.padEnd(
-          35
-        )} | ${percentageStr} | ${size}`;
-      },
-      stopOnComplete: true,
-      barsize: 40,
-      align: "left",
-    },
-    cliProgress.Presets.shades_classic
-  );
-
   constructor(ipAddress: string, storeId: string) {
     this.storeId = storeId;
-    this.sessionId = ""; // Session ID will be set after starting the upload session
-    this.publicKey = ""; // Public key will be set after initializing the wallet
+    this.sessionId = "";
+    this.publicKey = "";
     this.ipAddress = ipAddress;
 
     // Get or create SSL certificates
@@ -93,7 +56,9 @@ export class PropagationServer {
    */
   async initializeWallet() {
     this.wallet = await Wallet.load("default");
-    this.publicKey = await this.wallet.getPublicSyntheticKey().toString("hex");
+    this.publicKey = (
+      await this.wallet.getPublicSyntheticKey()
+    ).toString("hex");
   }
 
   /**
@@ -103,15 +68,12 @@ export class PropagationServer {
     return new https.Agent({
       cert: fs.readFileSync(this.certPath),
       key: fs.readFileSync(this.keyPath),
-      rejectUnauthorized: false, // Allow self-signed certificates
+      rejectUnauthorized: false,
     });
   }
 
   /**
    * Check if the store and optional root hash exist by making a HEAD request.
-   *
-   * @param {string} [rootHash] - Optional root hash to check for existence.
-   * @returns {Promise<{ storeExists: boolean, rootHashExists: boolean }>} - An object indicating if the store and root hash exist.
    */
   async checkStoreExists(
     rootHash?: string
@@ -157,9 +119,6 @@ export class PropagationServer {
 
   /**
    * Start an upload session by sending a POST request with the rootHash.dat file.
-   *
-   * @param {string} rootHash - The root hash used to name the .dat file.
-   * @param {string} datFilePath - The full path to the rootHash.dat file.
    */
   async startUploadSession(rootHash: string) {
     const spinner = createSpinner(
@@ -168,11 +127,7 @@ export class PropagationServer {
 
     try {
       const formData = new FormData();
-      const datFilePath = path.join(
-        STORE_PATH,
-        this.storeId,
-        `${rootHash}.dat`
-      );
+      const datFilePath = path.join(STORE_PATH, this.storeId, `${rootHash}.dat`);
 
       // Ensure the rootHash.dat file exists
       if (!fs.existsSync(datFilePath)) {
@@ -216,7 +171,6 @@ export class PropagationServer {
 
   /**
    * Request a nonce for a file by sending a HEAD request to the server.
-   * Checks if the file already exists based on the 'x-file-exists' header.
    */
   async getFileNonce(
     filename: string
@@ -247,7 +201,7 @@ export class PropagationServer {
 
   /**
    * Upload a file to the server by sending a PUT request.
-   * Logs progress using cli-progress for each file.
+   * Logs progress using a local cli-progress bar.
    */
   async uploadFile(label: string, dataPath: string) {
     const filePath = path.join(STORE_PATH, this.storeId, dataPath);
@@ -263,58 +217,83 @@ export class PropagationServer {
     const keyOwnershipSig = await wallet.createKeyOwnershipSignature(nonce);
     const publicKey = await wallet.getPublicSyntheticKey();
 
-    const formData = new FormData();
-    formData.append("file", fs.createReadStream(filePath));
-
+    // Get the file size
     const fileSize = fs.statSync(filePath).size;
 
-    // Create a new progress bar for each file
-    const progressBar = PropagationServer.multiBar.create(fileSize, 0, {
-      filename: yellow(path.basename(label)),
-      percentage: 0,
-    });
+    let progressBar: cliProgress.SingleBar | undefined;
 
-    let uploadedBytes = 0;
+    try {
+      // Create a new progress bar for the file
+      progressBar = new cliProgress.SingleBar(
+        {
+          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          hideCursor: true,
+          barsize: 30,
+          align: "left",
+          autopadding: true,
+          noTTYOutput: false,
+          stopOnComplete: true,
+          clearOnComplete: false,
+        },
+        cliProgress.Presets.legacy
+      );
 
-    const config: AxiosRequestConfig = {
-      headers: {
-        "Content-Type": "multipart/form-data",
+      progressBar.start(fileSize, 0, {
+        filename: formatFilename(path.basename(label)),
+      });
+
+      // Create a progress stream
+      const progressStream = ProgressStream({
+        length: fileSize,
+        time: 500, // Adjust as needed
+      });
+
+      progressStream.on("progress", (progress) => {
+        progressBar!.update(progress.transferred);
+      });
+
+      // Create a read stream and pipe it through the progress stream
+      const fileReadStream = fs
+        .createReadStream(filePath)
+        .pipe(progressStream);
+
+      // Use form-data to construct the request body
+      const formData = new FormData();
+      formData.append("file", fileReadStream);
+
+      const headers = {
+        ...formData.getHeaders(),
         "x-nonce": nonce,
         "x-public-key": publicKey.toString("hex"),
         "x-key-ownership-sig": keyOwnershipSig,
-        ...formData.getHeaders(),
-      },
-      httpsAgent: this.createHttpsAgent(),
+      };
 
-      // Tracking upload progress and updating the progress bar
-      onUploadProgress: (progressEvent: any) => {
-        const uploadedBytes = progressEvent.loaded;
-        const percentage = Math.round(
-          (100 * progressEvent.loaded) / progressEvent.total
-        );
-        progressBar.update(uploadedBytes, { percentage });
-      },
-    };
+      const config: AxiosRequestConfig = {
+        headers: headers,
+        httpsAgent: this.createHttpsAgent(),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      };
 
-    try {
       const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${dataPath}`;
       const response = await axios.put(url, formData, config);
 
-      // Complete the progress bar
-      progressBar.update(fileSize, { percentage: 100 });
-      progressBar.stop();
-
-      return response.data;
+      // Wait for the progress stream to finish
+      await new Promise<void>((resolve, reject) => {
+        progressStream.on("end", resolve);
+        progressStream.on("error", reject);
+      });
     } catch (error: any) {
-      console.error(red(`✖ Error uploading file ${label}:`), error.message);
-      progressBar.stop(); // Stop the progress bar in case of error
       throw error;
+    } finally {
+      if (progressBar) {
+        progressBar.stop();
+      }
     }
   }
 
   /**
    * Commit the upload session by sending a POST request to the server.
-   * This finalizes the upload and moves files from the temporary session directory to the permanent location.
    */
   async commitUploadSession() {
     const spinner = createSpinner(
@@ -350,10 +329,6 @@ export class PropagationServer {
 
   /**
    * Static function to handle the entire upload process for multiple files based on rootHash.
-   * @param {string} storeId - The ID of the DataStore.
-   * @param {string} rootHash - The root hash used to derive the file set.
-   * @param {string} publicKey - The public key of the user.
-   * @param {string} ipAddress - The IP address of the server.
    */
   static async uploadStore(
     storeId: string,
@@ -394,10 +369,21 @@ export class PropagationServer {
     const dataStore = DataStore.from(storeId);
     const files = await dataStore.getFileSetForRootHash(rootHash);
 
-    // Upload each file
-    for (const file of files) {
-      await propagationServer.uploadFile(file.name, file.path);
-    }
+    // Prepare upload tasks
+    const uploadTasks = files.map((file) => ({
+      label: file.name,
+      dataPath: file.path,
+    }));
+
+    // Limit the number of concurrent uploads
+    const concurrencyLimit = 3; // Adjust this number as needed
+
+    // Import asyncPool from your utilities
+    const { asyncPool } = await import("../utils/asyncPool");
+
+    await asyncPool(concurrencyLimit, uploadTasks, async (task) => {
+      await propagationServer.uploadFile(task.label, task.dataPath);
+    });
 
     // Commit the session after all files have been uploaded
     await propagationServer.commitUploadSession();
@@ -409,56 +395,82 @@ export class PropagationServer {
 
   /**
    * Fetch a file from the server by sending a GET request and return its content in memory.
-   * Logs progress using cli-progress.
-   * @param {string} dataPath - The data path of the file to download.
-   * @returns {Promise<Buffer>} - The file content in memory as a Buffer.
+   * Logs progress using a local cli-progress bar.
    */
   async fetchFile(dataPath: string): Promise<Buffer> {
+    const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
     const config: AxiosRequestConfig = {
-      responseType: "arraybuffer", // To store the file content in memory
+      responseType: "stream",
       httpsAgent: this.createHttpsAgent(),
-      onDownloadProgress: (progressEvent) => {
-        const totalLength = progressEvent.total || 0;
-        const downloadedBytes = progressEvent.loaded;
-
-        // Update progress bar
-        const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-          dataPath: yellow(dataPath),
-          percentage: 0,
-        });
-
-        progressBar.update(downloadedBytes, {
-          percentage: Math.round((downloadedBytes / totalLength) * 100),
-        });
-
-        if (downloadedBytes === totalLength) {
-          progressBar.update(totalLength, { percentage: 100 });
-          progressBar.stop();
-          console.log(green(`✔ File ${dataPath} fetched successfully.`));
-        }
-      },
     };
 
-    const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
+    let progressBar: cliProgress.SingleBar | undefined;
 
     try {
       const response = await axios.get(url, config);
+      const totalLengthHeader = response.headers["content-length"];
+      const totalLength = totalLengthHeader
+        ? parseInt(totalLengthHeader, 10)
+        : null;
 
-      // Return the file contents as a Buffer
-      return Buffer.from(response.data);
+      if (!totalLength) {
+        throw new Error("Content-Length header is missing");
+      }
+
+      // Create a new progress bar for the file
+      progressBar = new cliProgress.SingleBar(
+        {
+          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          hideCursor: true,
+          barsize: 30,
+          align: "left",
+          autopadding: true,
+          noTTYOutput: false,
+          stopOnComplete: true,
+          clearOnComplete: false,
+        },
+        cliProgress.Presets.legacy
+      );
+
+      progressBar.start(totalLength, 0, {
+        filename: formatFilename(dataPath),
+      });
+
+      let dataBuffers: Buffer[] = [];
+
+      const progressStream = ProgressStream({
+        length: totalLength,
+        time: 500, // Adjust as needed
+      });
+
+      progressStream.on("progress", (progress) => {
+        progressBar!.update(progress.transferred);
+      });
+
+      response.data.pipe(progressStream);
+
+      progressStream.on("data", (chunk: Buffer) => {
+        dataBuffers.push(chunk);
+      });
+
+      // Wait for the progress stream to finish
+      await new Promise<void>((resolve, reject) => {
+        progressStream.on("end", resolve);
+        progressStream.on("error", reject);
+      });
+
+      return Buffer.concat(dataBuffers);
     } catch (error) {
-      console.error(red(`✖ Error fetching file ${dataPath}:`), error);
       throw error;
+    } finally {
+      if (progressBar) {
+        progressBar.stop();
+      }
     }
   }
 
   /**
    * Get details of a file, including whether it exists and its size.
-   * Makes a HEAD request to the server and checks the response headers.
-   *
-   * @param {string} dataPath - The path of the file within the DataStore.
-   * @param {string} rootHash - The root hash associated with the DataStore.
-   * @returns {Promise<{ exists: boolean; size: number }>} - An object containing file existence and size information.
    */
   async getFileDetails(
     dataPath: string,
@@ -469,7 +481,6 @@ export class PropagationServer {
         httpsAgent: this.createHttpsAgent(),
       };
 
-      // Construct the URL for the HEAD request to check file details
       const url = `https://${this.ipAddress}:${PropagationServer.port}/store/${this.storeId}/${rootHash}/${dataPath}`;
       const response = await axios.head(url, config);
 
@@ -479,7 +490,7 @@ export class PropagationServer {
 
       return {
         exists: fileExists,
-        size: fileExists ? fileSize : 0, // Return 0 size if file doesn't exist
+        size: fileExists ? fileSize : 0,
       };
     } catch (error: any) {
       console.error(
@@ -492,78 +503,87 @@ export class PropagationServer {
 
   /**
    * Download a file from the server by sending a GET request.
-   * Logs progress using cli-progress.
-   * @param {string} dataPath - The data path of the file to download.
+   * Logs progress using a local cli-progress bar.
    */
-  async downloadFile(dataPath: string) {
-    const config: AxiosRequestConfig = {
-      responseType: "stream", // Make sure the response is streamed
-      httpsAgent: this.createHttpsAgent(),
-    };
-
+  async downloadFile(label: string, dataPath: string) {
     const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
-    const downloadPath = path.join(STORE_PATH, this.storeId, dataPath); // Save to the correct store directory
+    const downloadPath = path.join(STORE_PATH, this.storeId, dataPath);
 
     // Ensure that the directory for the file exists
     fs.mkdirSync(path.dirname(downloadPath), { recursive: true });
 
-    const fileWriteStream = fs.createWriteStream(downloadPath);
+    const config: AxiosRequestConfig = {
+      responseType: "stream",
+      httpsAgent: this.createHttpsAgent(),
+    };
+
+    let progressBar: cliProgress.SingleBar | undefined;
 
     try {
       const response = await axios.get(url, config);
-      const totalLength = parseInt(response.headers["content-length"], 10);
+      const totalLengthHeader = response.headers["content-length"];
+      const totalLength = totalLengthHeader
+        ? parseInt(totalLengthHeader, 10)
+        : null;
 
-      console.log(cyan(`Starting download for ${dataPath}...`));
+      if (!totalLength) {
+        throw new Error("Content-Length header is missing");
+      }
 
-      // Create a progress bar for the download
-      const progressBar = PropagationServer.multiBar.create(totalLength, 0, {
-        dataPath: yellow(dataPath),
-        percentage: 0,
+      // Create a new progress bar for the file
+      progressBar = new cliProgress.SingleBar(
+        {
+          format: `${blue('[{bar}]')} | ${yellow('{filename}')} | {percentage}% | {value}/{total} bytes`,
+          hideCursor: true,
+          barsize: 30,
+          align: "left",
+          autopadding: true,
+          noTTYOutput: false,
+          stopOnComplete: true,
+          clearOnComplete: false,
+        },
+        cliProgress.Presets.legacy
+      );
+
+      progressBar.start(totalLength, 0, {
+        filename: formatFilename(label),
       });
 
-      let downloadedBytes = 0;
+      const fileWriteStream = fs.createWriteStream(downloadPath);
 
-      // Pipe the response data to the file stream and track progress
-      response.data.on("data", (chunk: Buffer) => {
-        downloadedBytes += chunk.length;
-        progressBar.update(downloadedBytes, {
-          percentage: Math.round((downloadedBytes / totalLength) * 100),
-        });
+      const progressStream = ProgressStream({
+        length: totalLength,
+        time: 500, // Adjust as needed
       });
 
-      // Pipe the data into the file and finalize
-      response.data.pipe(fileWriteStream);
-
-      return new Promise<void>((resolve, reject) => {
-        fileWriteStream.on("finish", () => {
-          progressBar.update(totalLength, { percentage: 100 });
-          progressBar.stop();
-          console.log(
-            green(
-              `
-              File ${dataPath} downloaded successfully to ${downloadPath}.`
-            )
-          );
-          resolve();
-        });
-
-        fileWriteStream.on("error", (error) => {
-          progressBar.stop();
-          console.error(red(`✖ Error downloading file ${dataPath}:`), error);
-          reject(error);
-        });
+      progressStream.on("progress", (progress) => {
+        progressBar!.update(progress.transferred);
       });
+
+      response.data.pipe(progressStream).pipe(fileWriteStream);
+
+      // Wait for both the file write stream and the progress stream to finish
+      await Promise.all([
+        new Promise<void>((resolve, reject) => {
+          fileWriteStream.on("finish", resolve);
+          fileWriteStream.on("error", reject);
+        }),
+        new Promise<void>((resolve, reject) => {
+          progressStream.on("end", resolve);
+          progressStream.on("error", reject);
+        }),
+      ]);
     } catch (error) {
-      console.error(red(`✖ Error downloading file ${dataPath}:`), error);
       throw error;
+    } finally {
+      if (progressBar) {
+        progressBar.stop();
+      }
     }
   }
 
   /**
    * Static function to handle downloading multiple files from a DataStore based on file paths.
-   * @param {string} storeId - The ID of the DataStore.
-   * @param {string[]} dataPaths - The list of data paths to download.
-   * @param {string} ipAddress - The IP address of the server.
    */
   static async downloadStore(
     storeId: string,
@@ -582,18 +602,41 @@ export class PropagationServer {
       throw new Error(`Store ${storeId} does not exist.`);
     }
 
-    await propagationServer.downloadFile("height.json");
-    const datFileContent = await propagationServer.fetchFile(`${rootHash}.dat`);
+    // Fetch the rootHash.dat file
+    const datFileContent = await propagationServer.fetchFile(
+      `${rootHash}.dat`
+    );
     const root = JSON.parse(datFileContent.toString());
+
+    // Prepare download tasks
+    const downloadTasks = [];
 
     for (const [fileKey, fileData] of Object.entries(root.files)) {
       const dataPath = getFilePathFromSha256(
-        root.files[fileKey].sha256,
+        (fileData as any).sha256,
         "data"
       );
 
-      await propagationServer.downloadFile(dataPath);
+      const label = Buffer.from(fileKey, "hex").toString("utf-8");
+
+      downloadTasks.push({ label, dataPath });
     }
+
+    // Limit the number of concurrent downloads
+    const concurrencyLimit = 5; // Adjust this number as needed
+
+    // Import asyncPool from your utilities
+    const { asyncPool } = await import("../utils/asyncPool");
+
+    await asyncPool(concurrencyLimit, downloadTasks, async (task) => {
+      await propagationServer.downloadFile(task.label, task.dataPath);
+    });
+
+    // Save the rootHash.dat file
+    fs.writeFileSync(
+      path.join(STORE_PATH, storeId, `${rootHash}.dat`),
+      datFileContent
+    );
 
     const dataStore = DataStore.from(storeId);
     await dataStore.generateManifestFile();
