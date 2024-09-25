@@ -85,7 +85,10 @@ export class Wallet {
     return mnemonic;
   }
 
-  public static async importWallet(walletName: string, seed?: string): Promise<string> {
+  public static async importWallet(
+    walletName: string,
+    seed?: string
+  ): Promise<string> {
     const mnemonic = seed || (await askForMnemonicInput()).providedMnemonic;
     if (!bip39.validateMnemonic(mnemonic)) {
       throw new Error("Provided mnemonic is invalid.");
@@ -94,7 +97,9 @@ export class Wallet {
     return mnemonic;
   }
 
-  public static async importWalletFromChia(walletName: string): Promise<string> {
+  public static async importWalletFromChia(
+    walletName: string
+  ): Promise<string> {
     const chiaRoot = getChiaRoot();
     const certificateFolderPath = `${chiaRoot}/config/ssl`;
     const config = getChiaConfig();
@@ -169,10 +174,13 @@ export class Wallet {
     return Object.keys(config);
   }
 
-  private static async getWalletFromKeyring(walletName: string): Promise<string | null> {
+  private static async getWalletFromKeyring(
+    walletName: string
+  ): Promise<string | null> {
     const nconfManager = new NconfManager(KEYRING_FILE);
     if (await nconfManager.configExists()) {
-      const encryptedData: EncryptedData | null = await nconfManager.getConfigValue(walletName);
+      const encryptedData: EncryptedData | null =
+        await nconfManager.getConfigValue(walletName);
       if (encryptedData) {
         return decryptData(encryptedData);
       }
@@ -180,7 +188,10 @@ export class Wallet {
     return null;
   }
 
-  private static async saveWalletToKeyring(walletName: string, mnemonic: string): Promise<void> {
+  private static async saveWalletToKeyring(
+    walletName: string,
+    mnemonic: string
+  ): Promise<void> {
     const nconfManager = new NconfManager(KEYRING_FILE);
     const encryptedData = encryptData(mnemonic);
     await nconfManager.setConfigValue(walletName, encryptedData);
@@ -189,7 +200,10 @@ export class Wallet {
   public async createKeyOwnershipSignature(nonce: string): Promise<string> {
     const message = `Signing this message to prove ownership of key.\n\nNonce: ${nonce}`;
     const privateSyntheticKey = await this.getPrivateSyntheticKey();
-    const signature = signMessage(Buffer.from(message, "utf-8"), privateSyntheticKey);
+    const signature = signMessage(
+      Buffer.from(message, "utf-8"),
+      privateSyntheticKey
+    );
     return signature.toString("hex");
   }
 
@@ -212,37 +226,76 @@ export class Wallet {
     feeBigInt: bigint,
     omitCoins: Coin[] = []
   ): Promise<Coin[]> {
-    const cache = new FileCache<{ coinId: string; expiry: number }>(path.join(USER_DIR_PATH, "reserved_coins"));
-    const cachedReservedCoins = cache.getCachedKeys();
-    const now = Date.now();
-    const omitCoinIds = omitCoins.map((coin) => getCoinId(coin).toString("hex"));
-
-    cachedReservedCoins.forEach((coinId) => {
-      const reservation = cache.get(coinId);
-      if (reservation && reservation.expiry > now) {
-        omitCoinIds.push(coinId);
-      } else {
-        cache.delete(coinId);
-      }
-    });
+    const cache = new FileCache<{ coinId: string; expiry: number }>(
+      path.join(USER_DIR_PATH, "reserved_coins")
+    );
 
     const ownerPuzzleHash = await this.getOwnerPuzzleHash();
 
-    const coinsResp = await peer.getAllUnspentCoins(
-      ownerPuzzleHash,
-      MIN_HEIGHT,
-      Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-    );
+    // Define a function to attempt selecting unspent coins
+    const trySelectCoins = async (): Promise<Coin[]> => {
+      const now = Date.now();
+      const omitCoinIds = omitCoins.map((coin) =>
+        getCoinId(coin).toString("hex")
+      );
 
-    const unspentCoins = coinsResp.coins.filter(
-      (coin) => !omitCoinIds.includes(getCoinId(coin).toString("hex"))
-    );
+      // Update omitCoinIds with currently valid reserved coins
+      const cachedReservedCoins = cache.getCachedKeys();
 
-    const selectedCoins = selectCoins(unspentCoins, feeBigInt + coinAmount);
-    if (selectedCoins.length === 0) {
-      throw new Error("No unspent coins available.");
+      cachedReservedCoins.forEach((coinId) => {
+        const reservation = cache.get(coinId);
+        if (reservation && reservation.expiry > now) {
+          if (!omitCoinIds.includes(coinId)) {
+            omitCoinIds.push(coinId);
+          }
+        } else {
+          cache.delete(coinId);
+        }
+      });
+
+      const coinsResp = await peer.getAllUnspentCoins(
+        ownerPuzzleHash,
+        MIN_HEIGHT,
+        Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+      );
+
+      const unspentCoins = coinsResp.coins.filter(
+        (coin) => !omitCoinIds.includes(getCoinId(coin).toString("hex"))
+      );
+
+      const selectedCoins = selectCoins(unspentCoins, feeBigInt + coinAmount);
+      return selectedCoins;
+    };
+
+    let selectedCoins: Coin[] = [];
+    let retry = true;
+
+    while (retry) {
+      selectedCoins = await trySelectCoins();
+
+      if (selectedCoins.length > 0) {
+        // Coins have been successfully selected
+        retry = false;
+      } else {
+        const now = Date.now();
+        // Check if there are any valid cached reserved coins left
+        const cachedReservedCoins = cache.getCachedKeys().filter((coinId) => {
+          const reservation = cache.get(coinId);
+          return reservation && reservation.expiry > now;
+        });
+
+        if (cachedReservedCoins.length > 0) {
+          // Wait 10 seconds and try again
+          console.log("No unspent coins available. Waiting 10 seconds...");
+          await new Promise((resolve) => setTimeout(resolve, 10000));
+        } else {
+          // No unspent coins and no reserved coins
+          throw new Error("No unspent coins available.");
+        }
+      }
     }
 
+    // Reserve the selected coins
     selectedCoins.forEach((coin) => {
       const coinId = getCoinId(coin).toString("hex");
       cache.set(coinId, { coinId, expiry: Date.now() + CACHE_DURATION });
@@ -251,13 +304,23 @@ export class Wallet {
     return selectedCoins;
   }
 
-  public static async calculateFeeForCoinSpends(peer: Peer, coinSpends: CoinSpend[] | null): Promise<bigint> {
+  public static async calculateFeeForCoinSpends(
+    peer: Peer,
+    coinSpends: CoinSpend[] | null
+  ): Promise<bigint> {
     return BigInt(1000000);
   }
 
-  public static async isCoinSpendable(peer: Peer, coinId: Buffer): Promise<boolean> {
+  public static async isCoinSpendable(
+    peer: Peer,
+    coinId: Buffer
+  ): Promise<boolean> {
     try {
-      return await peer.isCoinSpent(coinId, MIN_HEIGHT, Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex"));
+      return await peer.isCoinSpent(
+        coinId,
+        MIN_HEIGHT,
+        Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+      );
     } catch (error) {
       return false;
     }
