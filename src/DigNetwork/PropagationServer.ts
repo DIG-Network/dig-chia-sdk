@@ -698,9 +698,11 @@ export class PropagationServer {
         );
 
         if (!fs.existsSync(path.join(tempDir, dataPath))) {
-          throw new Error(
-            `Missing file: ${Buffer.from(fileKey, "hex")}, aborting session.`
-          );
+          if (!fs.existsSync(path.join(STORE_PATH, storeId, dataPath))) {
+            throw new Error(
+              `Missing file: ${Buffer.from(fileKey, "hex")}, aborting session.`
+            );
+          }
         }
       }
 
