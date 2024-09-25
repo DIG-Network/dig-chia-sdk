@@ -3,12 +3,26 @@ import superagent from 'superagent';
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 2000; // in milliseconds
 
+// Regular expression for validating both IPv4 and IPv6 addresses
+const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|(([0-9a-fA-F]{1,4}:){1,7}|:):(([0-9a-fA-F]{1,4}:){1,6}|:):([0-9a-fA-F]{1,4}|:):([0-9a-fA-F]{1,4}|:)|::)$/;
+
+// Helper function to validate the IP address
+const isValidIp = (ip: string): boolean => {
+  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+};
+
 export const getPublicIpAddress = async (): Promise<string | undefined> => {
   const publicIp = process.env.PUBLIC_IP;
 
   if (publicIp) {
     console.log('Public IP address from env:', publicIp);
-    return publicIp;
+    if (isValidIp(publicIp)) {
+      return publicIp;
+    } else {
+      console.error('Invalid public IP address in environment variable');
+      return undefined;
+    }
   }
 
   let attempt = 0;
@@ -16,8 +30,15 @@ export const getPublicIpAddress = async (): Promise<string | undefined> => {
   while (attempt < MAX_RETRIES) {
     try {
       const response = await superagent.get('https://api.datalayer.storage/user/v1/get_user_ip');
+      
       if (response.body && response.body.success) {
-        return response.body.ip_address;
+        const ipAddress = response.body.ip_address;
+
+        if (isValidIp(ipAddress)) {
+          return ipAddress;
+        } else {
+          throw new Error('Invalid IP address format received');
+        }
       } else {
         throw new Error('Failed to retrieve public IP address');
       }
