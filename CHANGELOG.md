@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.86](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.85...v0.0.1-alpha.86) (2024-09-25)
+
+
+### Features
+
+* add retry logic to keep selecting coins until it finds one ([0ef5514](https://github.com/DIG-Network/dig-chia-sdk/commit/0ef5514ebf73f2ec356b04e943411b6efc0bde57))
+
+
+### Bug Fixes
+
+* public ip logic ([b722fa0](https://github.com/DIG-Network/dig-chia-sdk/commit/b722fa0c6391eb7cfebc49be5ce4e50fae44483f))
+* public ip logic ([3642458](https://github.com/DIG-Network/dig-chia-sdk/commit/3642458eb44611496f70cb26c12a411164b9e77d))
+
 ### [0.0.1-alpha.85](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.84...v0.0.1-alpha.85) (2024-09-25)
 
 
