@@ -95,11 +95,17 @@ export const getCoinState = (
 };
 
 /**
- * Retrieves a list of valid store folders (64-character hexadecimal names) in the DIG folder.
- *
- * @returns {string[]} An array of valid folder names.
+ * Retrieves the list of valid store folders. 
+ * If the STORE_PATH directory does not exist, it is created.
+ * 
+ * @returns {string[]} An array of valid store folder names.
  */
 export const getStoresList = (): string[] => {
+  // Check if the STORE_PATH exists, create it if not
+  if (!fs.existsSync(STORE_PATH)) {
+    fs.mkdirSync(STORE_PATH, { recursive: true });
+  }
+
   const folders = fs.readdirSync(STORE_PATH);
   return folders.filter(
     (folder) =>
