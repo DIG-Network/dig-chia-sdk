@@ -657,7 +657,10 @@ export class PropagationServer {
     const downloadTasks = [];
 
     for (const [fileKey, fileData] of Object.entries(root.files)) {
-      const dataPath = getFilePathFromSha256((fileData as any).sha256, "data");
+      const dataPath = getFilePathFromSha256(
+        root.files[fileKey].sha256,
+        "data"
+      );
       const label = Buffer.from(fileKey, "hex").toString("utf-8");
       downloadTasks.push({ label, dataPath });
     }
@@ -687,17 +690,19 @@ export class PropagationServer {
 
       // Integrity check for the downloaded files was done during the download
       // Here we want to make sure we got all the files or we reject the download session
-      /*for (const [fileKey, fileData] of Object.entries(root.files)) {
+      for (const [fileKey, fileData] of Object.entries(root.files)) {
         const dataPath = getFilePathFromSha256(
-          (fileData as any).sha256,
+          root.files[fileKey].sha256,
           "data"
         );
 
         const downloadPath = path.join(tempDir, storeId, dataPath);
         if (!fs.existsSync(path.join(downloadPath, dataPath))) {
-          throw new Error(`Missing file!: ${Buffer.from(fileKey, "utf-8")}, aborting session.`);
+          throw new Error(
+            `Missing file: ${Buffer.from(fileKey, "utf-8")}, aborting session.`
+          );
         }
-      }*/
+      }
 
       // After all downloads are complete, copy from temp directory to the main directory
       const destinationDir = path.join(STORE_PATH, storeId);
@@ -709,6 +714,8 @@ export class PropagationServer {
       await dataStore.generateManifestFile();
 
       console.log(green(`✔ All files have been downloaded to ${storeId}.`));
+    } catch (error) {
+      console.log(red("✖ Error downloading files:"), error);
     } finally {
       // Clean up the temporary directory
       fsExtra.removeSync(tempDir);
