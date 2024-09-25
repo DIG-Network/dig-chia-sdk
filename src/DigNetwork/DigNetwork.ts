@@ -173,6 +173,7 @@ export class DigNetwork {
               // Download the store root and associated data
               await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
             } catch (error) {
+              console.log(error);
               break;
             }
 
