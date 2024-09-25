@@ -169,13 +169,8 @@ export class DigNetwork {
               continue;
             }
 
-            try {
-              // Download the store root and associated data
-              await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
-            } catch (error) {
-              console.log(error);
-              break;
-            }
+            // Download the store root and associated data
+            await selectedPeer.downloadStoreRoot(rootInfo.root_hash);
 
             // Clear the blacklist upon successful download
             peerBlackList = [];
@@ -183,10 +178,11 @@ export class DigNetwork {
             // Break after successful download to proceed to next root hash
             break;
           } catch (error: any) {
-            console.error(
-              `Error downloading from peer ${selectedPeer?.IpAddress}. Retrying with another peer.`,
-              error
-            );
+            if (error.message)
+              console.error(
+                `Error downloading from peer ${selectedPeer?.IpAddress}. Retrying with another peer.`,
+                error
+              );
             if (selectedPeer) {
               peerBlackList.push(selectedPeer.IpAddress); // Blacklist and retry
             }

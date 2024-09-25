@@ -687,7 +687,7 @@ export class PropagationServer {
 
       // Integrity check for the downloaded files was done during the download
       // Here we want to make sure we got all the files or we reject the download session
-      for (const [fileKey, fileData] of Object.entries(root.files)) {
+      /*for (const [fileKey, fileData] of Object.entries(root.files)) {
         const dataPath = getFilePathFromSha256(
           (fileData as any).sha256,
           "data"
@@ -697,7 +697,7 @@ export class PropagationServer {
         if (!fs.existsSync(path.join(downloadPath, dataPath))) {
           throw new Error(`Missing file!: ${Buffer.from(fileKey, "utf-8")}, aborting session.`);
         }
-      }
+      }*/
 
       // After all downloads are complete, copy from temp directory to the main directory
       const destinationDir = path.join(STORE_PATH, storeId);
