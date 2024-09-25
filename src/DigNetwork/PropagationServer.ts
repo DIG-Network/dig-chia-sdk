@@ -678,15 +678,16 @@ export class PropagationServer {
           task.label,
           task.dataPath,
           rootHash,
-          path.join(tempDir, storeId)
+          tempDir
         );
       });
 
       // Save the rootHash.dat file to the temporary directory
-      fs.writeFileSync(
-        path.join(tempDir, storeId, `${rootHash}.dat`),
-        datFileContent
-      );
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      fs.writeFileSync(path.join(tempDir, `${rootHash}.dat`), datFileContent);
 
       // Integrity check for the downloaded files was done during the download
       // Here we want to make sure we got all the files or we reject the download session
@@ -696,17 +697,19 @@ export class PropagationServer {
           "data"
         );
 
-        const downloadPath = path.join(tempDir, storeId, dataPath);
-        if (!fs.existsSync(path.join(downloadPath, dataPath))) {
+        if (!fs.existsSync(path.join(tempDir, dataPath))) {
           throw new Error(
-            `Missing file: ${Buffer.from(fileKey, "utf-8")}, aborting session.`
+            `Missing file: ${Buffer.from(fileKey, "hex")}, aborting session.`
           );
         }
       }
 
       // After all downloads are complete, copy from temp directory to the main directory
       const destinationDir = path.join(STORE_PATH, storeId);
-      fsExtra.copySync(path.join(tempDir, storeId), destinationDir);
+      fsExtra.copySync(tempDir, destinationDir, {
+        overwrite: false, // Prevents overwriting existing files
+        errorOnExist: false, // No error if file already exists
+      });
 
       // Generate the manifest file in the main directory
       const dataStore = DataStore.from(storeId);
