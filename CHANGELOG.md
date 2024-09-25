@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.85](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.84...v0.0.1-alpha.85) (2024-09-25)
+
+
+### Bug Fixes
+
+* load mnemonic ([809f263](https://github.com/DIG-Network/dig-chia-sdk/commit/809f263632822a3b78d30a27142c9d91d9d1e17c))
+
 ### [0.0.1-alpha.84](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.83...v0.0.1-alpha.84) (2024-09-25)
 
 

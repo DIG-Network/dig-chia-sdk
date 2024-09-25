@@ -26,6 +26,8 @@ import {
 } from "@dignetwork/datalayer-driver";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { FileCache } from "../utils/FileCache";
+import { USER_DIR_PATH } from "../utils/config";
+import path from "path";
 
 const KEYRING_FILE = "keyring.json";
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -210,7 +212,7 @@ export class Wallet {
     feeBigInt: bigint,
     omitCoins: Coin[] = []
   ): Promise<Coin[]> {
-    const cache = new FileCache<{ coinId: string; expiry: number }>("reserved_coins");
+    const cache = new FileCache<{ coinId: string; expiry: number }>(path.join(USER_DIR_PATH, "reserved_coins"));
     const cachedReservedCoins = cache.getCachedKeys();
     const now = Date.now();
     const omitCoinIds = omitCoins.map((coin) => getCoinId(coin).toString("hex"));
