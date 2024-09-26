@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.97](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2024-09-26)
+
+
+### Features
+
+* add enhanced server coin management ([2a968b6](https://github.com/DIG-Network/dig-chia-sdk/commit/2a968b64ac58acb54e00b5c289c7057be253ce5f))
+
 ### [0.0.1-alpha.96](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.95...v0.0.1-alpha.96) (2024-09-26)
 
 
