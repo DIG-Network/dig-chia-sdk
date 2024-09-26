@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.101](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.100...v0.0.1-alpha.101) (2024-09-26)
+
+
+### Bug Fixes
+
+* revert content server ([99c3689](https://github.com/DIG-Network/dig-chia-sdk/commit/99c3689c195aa6cec4c144956a2549d912958b7d))
+
 ### [0.0.1-alpha.100](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2024-09-26)
 
 
