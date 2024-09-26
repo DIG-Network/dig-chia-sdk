@@ -4,6 +4,7 @@ import { DigConfig } from "../types";
 import { Config } from "../types";
 import inquirer from "inquirer";
 import os from "os";
+import { Environment } from "./Environment";
 
 export const NETWORK_AGG_SIG_DATA =
   "ccd5bb71183532bff220ba46c268991a3ff07eb358e8255a65c30a2dce0e5fbb";
@@ -15,14 +16,12 @@ export const MIN_HEIGHT_HEADER_HASH =
   "b29a4daac2434fd17a36e15ba1aac5d65012d4a66f99bed0bf2b5342e92e562c";
 
 export const DIG_FOLDER_PATH =
-  process.env.DIG_FOLDER_PATH || path.join(process.cwd(), ".dig");
+  Environment.DIG_FOLDER_PATH || path.join(process.cwd(), ".dig");
 
 export const STORE_PATH = path.join(DIG_FOLDER_PATH, "stores");
 
 export const USER_DIR_PATH = path.join(os.homedir(), ".dig");
 export const CONFIG_FILE_PATH = path.join(DIG_FOLDER_PATH, "dig.config.json");
-
-
 
 export const getHeightFilePath = (storeId: string): string =>
   path.join(STORE_PATH, storeId, "height.json");
@@ -95,9 +94,9 @@ export const getCoinState = (
 };
 
 /**
- * Retrieves the list of valid store folders. 
+ * Retrieves the list of valid store folders.
  * If the STORE_PATH directory does not exist, it is created.
- * 
+ *
  * @returns {string[]} An array of valid store folder names.
  */
 export const getStoresList = (): string[] => {
@@ -140,7 +139,7 @@ export const getActiveStoreId = async (): Promise<Buffer | null> => {
 
   const validFolders = getStoresList();
 
-  if (validFolders.length === 1 || process.env.REMOTE_NODE === "1") {
+  if (validFolders.length === 1 || Environment.REMOTE_NODE) {
     // If only one valid folder exists, set it as the active_store and return it
     config.active_store = validFolders[0];
     fs.writeFileSync(configFilePath, JSON.stringify(config, null, 4));
@@ -188,7 +187,7 @@ export const ensureDigConfig = (baseDir: string): DigConfig => {
     fs.writeFileSync(
       CONFIG_FILE_PATH,
       JSON.stringify(defaultConfig, null, 4),
-      "utf-8",
+      "utf-8"
     );
     console.log(`Created new dig.config.json at ${CONFIG_FILE_PATH}`);
     return defaultConfig;

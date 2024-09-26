@@ -16,6 +16,7 @@ import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
 import NodeCache from "node-cache";
 import { getPublicIpAddress } from '../utils/network';
+import { Environment } from "../utils/Environment";
 
 const serverCoinCollateral = 300_000_000;
 
@@ -215,7 +216,7 @@ export class ServerCoin {
       }
     }
 
-    if (process.env.DIG_DEBUG === "1") {
+    if (Environment.DEBUG) {
       console.log("Server Coin Peers: ", serverCoinPeers);
     }
 
@@ -255,7 +256,7 @@ export class ServerCoin {
     }
     
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
-    if (process.env.DIG_DEBUG === "1") {
+    if (Environment.DEBUG) {
       console.log("Server Coin Peers: ", serverCoinPeers);
     }
     return _.sampleSize(serverCoinPeers, sampleSize);

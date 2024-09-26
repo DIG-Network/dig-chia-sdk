@@ -8,6 +8,7 @@ import net from "net";
 import { memoize } from "lodash";
 import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
+import { Environment } from "../utils/Environment";
 
 const FULLNODE_PORT = 8444;
 const LOCALHOST = "127.0.0.1";
@@ -70,7 +71,7 @@ export class FullNodePeer {
    * @returns {string | null} The valid IP address or null if invalid
    */
   private static getTrustedFullNode(): string | null {
-    const trustedNodeIp = process.env.TRUSTED_FULLNODE || null;
+    const trustedNodeIp = Environment.TRUSTED_FULLNODE || null;
 
     if (trustedNodeIp && FullNodePeer.isValidIpAddress(trustedNodeIp)) {
       return trustedNodeIp;
@@ -235,7 +236,7 @@ export class FullNodePeer {
     new Tls(certFile, keyFile);
 
     const peerIPs = await FullNodePeer.getPeerIPs();
-    const trustedNodeIp = process.env.TRUSTED_FULLNODE || null;
+    const trustedNodeIp = Environment.TRUSTED_FULLNODE || null;
 
     const peers = await Promise.all(
       peerIPs.map(async (ip) => {
@@ -243,9 +244,9 @@ export class FullNodePeer {
           // Allow override of the trusted fullnode port if the override exists
           let port = FULLNODE_PORT;
           if (trustedNodeIp && ip === trustedNodeIp) {
-            const trustedFullNodePort = process.env.TRUSTED_FULLNODE_PORT;
+            const trustedFullNodePort = Environment.TRUSTED_FULLNODE_PORT;
             if (trustedFullNodePort) {
-              port = parseInt(trustedFullNodePort);
+              port = trustedFullNodePort;
             }
           }
           try {

@@ -2,6 +2,7 @@
  * Stopgap until better solution for finding public IPS found
  */
 import superagent from "superagent";
+import { Environment } from "./Environment";
 
 const MAX_RETRIES = 5;
 const RETRY_DELAY = 2000; // in milliseconds
@@ -18,7 +19,7 @@ const isValidIp = (ip: string): boolean => {
 };
 
 export const getPublicIpAddress = async (): Promise<string | undefined> => {
-  const publicIp = process.env.PUBLIC_IP;
+  const publicIp = Environment.PUBLIC_IP;
 
   if (publicIp) {
     console.log("Public IP address from env:", publicIp);
