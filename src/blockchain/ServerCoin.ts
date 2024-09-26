@@ -15,7 +15,7 @@ import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
 import NodeCache from "node-cache";
-import { getPublicIpAddress } from '../utils/network';
+import { getPublicIpAddress } from "../utils/network";
 import { Environment } from "../utils/Environment";
 
 const serverCoinCollateral = 300_000_000;
@@ -45,7 +45,7 @@ export class ServerCoin {
         BigInt(1000000)
       );
 
-      const { epoch: currentEpoch} = ServerCoin.getCurrentEpoch();
+      const { epoch: currentEpoch } = ServerCoin.getCurrentEpoch();
       const epochBasedHint = morphLauncherId(
         Buffer.from(this.storeId, "hex"),
         BigInt(currentEpoch)
@@ -185,7 +185,10 @@ export class ServerCoin {
     );
   }
 
-  public async getAllEpochPeers(epoch: number, blacklist: string[] = []): Promise<string[]> {
+  public async getAllEpochPeers(
+    epoch: number,
+    blacklist: string[] = []
+  ): Promise<string[]> {
     const cacheKey = `serverCoinPeers-${this.storeId}-${epoch}`;
 
     // Check if the result is already cached
@@ -194,12 +197,18 @@ export class ServerCoin {
       return cachedPeers;
     }
 
-    const epochBasedHint = morphLauncherId(Buffer.from(this.storeId, "hex"), BigInt(epoch));
+    const epochBasedHint = morphLauncherId(
+      Buffer.from(this.storeId, "hex"),
+      BigInt(epoch)
+    );
 
     const peer = await FullNodePeer.connect();
     const maxClvmCost = BigInt(11_000_000_000);
 
-    const hintedCoinStates = await peer.getHintedCoinStates(epochBasedHint, false);
+    const hintedCoinStates = await peer.getHintedCoinStates(
+      epochBasedHint,
+      false
+    );
 
     const filteredCoinStates = hintedCoinStates.filter(
       (coinState) => coinState.coin.amount >= serverCoinCollateral
@@ -254,7 +263,7 @@ export class ServerCoin {
     if (myIp) {
       blacklist.push(myIp);
     }
-    
+
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
     if (Environment.DEBUG) {
       console.log("Server Coin Peers: ", serverCoinPeers);
@@ -279,7 +288,35 @@ export class ServerCoin {
         (coin) => coin.epoch === currentEpoch
       );
 
+      const dataStore = DataStore.from(this.storeId);
+      const rootHistory = await dataStore.getRootHistory(true);
+
       if (existingCoin) {
+        const lastRoot = _.last(rootHistory);
+
+        // nothing to do
+        if (lastRoot?.synced && lastRoot?.root_hash === existingCoin.rootHash) {
+          return;
+        }
+
+        // everything is fine, lets just update the roothash for tracking
+        if (lastRoot?.synced && lastRoot?.root_hash !== existingCoin.rootHash) {
+          existingCoin.rootHash = lastRoot.root_hash;
+          // Update the conf with the modified server coin
+          await ServerCoin.serverCoinManager.setConfigValue(
+            `${this.storeId}:${peerIp}`,
+            serverCoins
+          );
+          return;
+        }
+
+        // If not synced, melt the coin, a new one will be created when synced up
+        // this helps prevent penalties for not having a valid peer registered
+        await this.melt(currentEpoch, peerIp);
+      }
+
+      // Don't create a server coin until you're synced up
+      if (!_.last(rootHistory)?.synced) {
         return;
       }
 
@@ -296,6 +333,7 @@ export class ServerCoin {
         },
         createdAt: new Date().toISOString(),
         epoch: currentEpoch,
+        rootHash: _.last(rootHistory)?.root_hash || "",
       };
 
       await FullNodePeer.waitForConfirmation(serverCoin.coin.parentCoinInfo);

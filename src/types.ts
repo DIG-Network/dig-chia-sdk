@@ -58,6 +58,7 @@ export interface ServerCoinData {
   coin: CoinData;
   createdAt: string; // ISO date string
   epoch: number;
+  rootHash: string;
 }
 
 export interface IncentiveProgramData {
