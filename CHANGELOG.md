@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.92](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2024-09-26)
+
+
+### Features
+
+* allow override of TRUSTED_FULLNODE_PORT ([954ac95](https://github.com/DIG-Network/dig-chia-sdk/commit/954ac95dfdaeba5734e39ce4255893ad148ef132))
+* allow override of TRUSTED_FULLNODE_PORT ([b2a02f5](https://github.com/DIG-Network/dig-chia-sdk/commit/b2a02f51da4f534b832e3c7eb0599aed10434ef7))
+
 ### [0.0.1-alpha.91](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.90...v0.0.1-alpha.91) (2024-09-26)
 
 
