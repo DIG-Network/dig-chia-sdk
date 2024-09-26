@@ -34,7 +34,7 @@ export class ServerCoin {
   }
 
   // Create a new server coin for the current epoch
-  public async createForEpoch(peerIp: string): Promise<ServerCoinDriver> {
+  public async createForEpoch(peerIp: string, rootHash: string): Promise<ServerCoinDriver> {
     try {
       const peer = await FullNodePeer.connect();
       const wallet = await Wallet.load("default");
@@ -74,7 +74,7 @@ export class ServerCoin {
         if (err.includes("no spendable coins")) {
           console.log("No coins available. Will try again in 5 seconds...");
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          return this.createForEpoch(peerIp);
+          return this.createForEpoch(peerIp, rootHash);
         }
         throw new Error(err);
       }
@@ -83,7 +83,8 @@ export class ServerCoin {
       await this.saveServerCoinData(
         newServerCoin.serverCoin,
         currentEpoch,
-        peerIp
+        peerIp,
+        rootHash
       );
 
       return newServerCoin.serverCoin;
@@ -96,7 +97,8 @@ export class ServerCoin {
   public async saveServerCoinData(
     serverCoin: ServerCoinDriver,
     epoch: number,
-    peerIp: string
+    peerIp: string,
+    rootHash: string,
   ): Promise<void> {
     const newServerCoinData: ServerCoinData = {
       coin: {
@@ -105,7 +107,8 @@ export class ServerCoin {
         parentCoinInfo: serverCoin.coin.parentCoinInfo.toString("hex"),
       },
       createdAt: new Date().toISOString(),
-      epoch: epoch,
+      epoch,
+      rootHash,
     };
 
     const serverCoins = await this.getServerCoinsForStore(peerIp);
@@ -290,10 +293,13 @@ export class ServerCoin {
 
       const dataStore = DataStore.from(this.storeId);
       const rootHistory = await dataStore.getRootHistory(true);
+      const lastRoot = _.last(rootHistory);
+
+      if (!lastRoot) {
+        throw new Error('Cant get the last root on chain, something is wrong.');
+      }
 
       if (existingCoin) {
-        const lastRoot = _.last(rootHistory);
-
         // nothing to do
         if (lastRoot?.synced && lastRoot?.root_hash === existingCoin.rootHash) {
           return;
@@ -323,7 +329,7 @@ export class ServerCoin {
       console.log(
         `No server coin found for epoch ${currentEpoch}. Creating new server coin...`
       );
-      const serverCoin = await this.createForEpoch(peerIp);
+      const serverCoin = await this.createForEpoch(peerIp, lastRoot?.root_hash);
 
       const newServerCoinData: ServerCoinData = {
         coin: {
