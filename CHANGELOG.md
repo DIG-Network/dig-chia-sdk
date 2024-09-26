@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.99](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2024-09-26)
+
+
+### Features
+
+* add inactivity timer to propagation server downloads ([e9beb23](https://github.com/DIG-Network/dig-chia-sdk/commit/e9beb231dbedf0392a806dba6cc9d225745f8ee9))
+* add public key to server coin ([ffd0c59](https://github.com/DIG-Network/dig-chia-sdk/commit/ffd0c596d2ca29a910443b1d09a56db83d8d80e6))
+* refactor content server driver to use axios ([12c2a44](https://github.com/DIG-Network/dig-chia-sdk/commit/12c2a44e2d36e4daaea1d036fb98c71a7cbd7637))
+
 ### [0.0.1-alpha.98](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2024-09-26)
 
 
