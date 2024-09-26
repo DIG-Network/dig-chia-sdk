@@ -29,26 +29,15 @@ export class FullNodePeer {
   private static deprioritizedIps: Set<string> = new Set(); // New set for deprioritized IPs
 
   static {
-    FullNodePeer.memoizedFetchNewPeerIPs = memoize(
-      FullNodePeer.fetchNewPeerIPs
-    );
+    FullNodePeer.memoizedFetchNewPeerIPs = memoize(FullNodePeer.fetchNewPeerIPs);
   }
 
   private constructor(peer: Peer) {
     this.peer = peer;
   }
 
-  /**
-   * Connect to the best peer, optionally using custom certificate and key file paths.
-   * @param {string} [certFilePath] - Optional custom certificate file path.
-   * @param {string} [keyFilePath] - Optional custom key file path.
-   * @returns {Promise<Peer>} The connected peer.
-   */
-  public static async connect(
-    certFilePath?: string,
-    keyFilePath?: string
-  ): Promise<Peer> {
-    const peer = await FullNodePeer.getBestPeer(certFilePath, keyFilePath);
+  public static async connect(): Promise<Peer> {
+    const peer = await FullNodePeer.getBestPeer();
     return new FullNodePeer(peer).peer;
   }
 
@@ -143,9 +132,7 @@ export class FullNodePeer {
           }
         }
       } catch (error: any) {
-        console.error(
-          `Failed to resolve IPs from ${DNS_HOST}: ${error.message}`
-        );
+        console.error(`Failed to resolve IPs from ${DNS_HOST}: ${error.message}`);
       }
     }
     throw new Error("No reachable IPs found in any DNS records.");
@@ -191,9 +178,7 @@ export class FullNodePeer {
             const timeoutPromise = new Promise<null>((_, reject) => {
               timeoutId = setTimeout(() => {
                 FullNodePeer.cachedPeer = null;
-                reject(
-                  new Error("Operation timed out. Reconnecting to a new peer.")
-                );
+                reject(new Error("Operation timed out. Reconnecting to a new peer."));
               }, 60000); // 1 minute
             });
 
@@ -212,17 +197,12 @@ export class FullNodePeer {
               return result;
             } catch (error: any) {
               // If the error is WebSocket-related or timeout, reset the peer
-              if (
-                error.message.includes("WebSocket") ||
-                error.message.includes("Operation timed out")
-              ) {
+              if (error.message.includes("WebSocket") || error.message.includes("Operation timed out")) {
                 FullNodePeer.cachedPeer = null;
                 // @ts-ignore
                 FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
                 FullNodePeer.deprioritizedIps.clear();
-                console.info(
-                  `Fullnode Peer error, reconnecting to a new peer...`
-                );
+                console.info(`Fullnode Peer error, reconnecting to a new peer...`);
                 const newPeer = await FullNodePeer.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
@@ -235,10 +215,7 @@ export class FullNodePeer {
     });
   }
 
-  private static async getBestPeer(
-    certFilePath?: string,
-    keyFilePath?: string
-  ): Promise<Peer> {
+  private static async getBestPeer(): Promise<Peer> {
     const now = Date.now();
 
     if (
@@ -248,29 +225,12 @@ export class FullNodePeer {
       return FullNodePeer.cachedPeer.peer;
     }
 
-    let certFile: string;
-    let keyFile: string;
+    const sslFolder = path.resolve(os.homedir(), ".dig", "ssl");
+    const certFile = path.join(sslFolder, "public_dig.crt");
+    const keyFile = path.join(sslFolder, "public_dig.key");
 
-    // If certFilePath or keyFilePath is provided, ensure both are provided
-    if (certFilePath && keyFilePath) {
-      certFile = certFilePath;
-      keyFile = keyFilePath;
-
-      if (!fs.existsSync(certFile)) {
-        throw new Error(`Certificate file not found: ${certFile}`);
-      }
-      if (!fs.existsSync(keyFile)) {
-        throw new Error(`Key file not found: ${keyFile}`);
-      }
-    } else {
-      // Use default paths if no custom paths are provided
-      const sslFolder = path.resolve(os.homedir(), ".dig", "ssl");
-      certFile = path.join(sslFolder, "public_dig.crt");
-      keyFile = path.join(sslFolder, "public_dig.key");
-
-      if (!fs.existsSync(sslFolder)) {
-        throw new Error(`SSL folder not found: ${sslFolder}`);
-      }
+    if (!fs.existsSync(sslFolder)) {
+      fs.mkdirSync(sslFolder, { recursive: true });
     }
 
     new Tls(certFile, keyFile);
@@ -298,9 +258,7 @@ export class FullNodePeer {
             );
             return FullNodePeer.createPeerProxy(peer);
           } catch (error: any) {
-            console.error(
-              `Failed to create peer for IP ${ip}: ${error.message}`
-            );
+            console.error(`Failed to create peer for IP ${ip}: ${error.message}`);
             return null;
           }
         }
@@ -341,9 +299,7 @@ export class FullNodePeer {
       (height, index) =>
         height === highestPeak &&
         !FullNodePeer.deprioritizedIps.has(peerIPs[index]) && // Exclude deprioritized IPs
-        (peerIPs[index] === LOCALHOST ||
-          peerIPs[index] === trustedNodeIp ||
-          peerIPs[index] === CHIA_NODES_HOST)
+        (peerIPs[index] === LOCALHOST || peerIPs[index] === trustedNodeIp || peerIPs[index] === CHIA_NODES_HOST)
     );
 
     // If LOCALHOST, TRUSTED_NODE_IP, or CHIA_NODES_HOST don't have the highest peak, select any peer with the highest peak
