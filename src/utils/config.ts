@@ -139,7 +139,7 @@ export const getActiveStoreId = async (): Promise<Buffer | null> => {
 
   const validFolders = getStoresList();
 
-  if (validFolders.length === 1 || Environment.REMOTE_NODE === "1") {
+  if (validFolders.length === 1 || Environment.REMOTE_NODE) {
     // If only one valid folder exists, set it as the active_store and return it
     config.active_store = validFolders[0];
     fs.writeFileSync(configFilePath, JSON.stringify(config, null, 4));
