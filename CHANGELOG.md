@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.91](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.90...v0.0.1-alpha.91) (2024-09-26)
+
+
+### Features
+
+* add inactivity timeout to content server requests ([a3fee47](https://github.com/DIG-Network/dig-chia-sdk/commit/a3fee4713107f552950aaeef0fd11e60ba894247))
+
 ### [0.0.1-alpha.90](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.89...v0.0.1-alpha.90) (2024-09-26)
 
 
