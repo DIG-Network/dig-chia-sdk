@@ -130,6 +130,11 @@ export class DigPeer {
     memos: Buffer[] = []
   ): Promise<void> {
     const paymentAddress = await this.contentServer.getPaymentAddress();
+
+    if (!paymentAddress) {
+      throw new Error("Payment address not found.");
+    }
+    
     const paymentAddressPuzzleHash = addressToPuzzleHash(paymentAddress);
     const output: Output = {
       puzzleHash: paymentAddressPuzzleHash,
