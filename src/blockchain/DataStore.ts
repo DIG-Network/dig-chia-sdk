@@ -475,7 +475,7 @@ export class DataStore {
     });
   }
 
-  public async getRootHistory(bustCache: boolean): Promise<RootHistoryItem[]> {
+  public async getRootHistory(bustCache?: boolean): Promise<RootHistoryItem[]> {
     if (bustCache) {
       rootHistoryCache.del(this.storeId);
     }
