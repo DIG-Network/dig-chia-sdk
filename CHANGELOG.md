@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.100](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.99...v0.0.1-alpha.100) (2024-09-26)
+
+
+### Bug Fixes
+
+* revert fullnode peer changes ([a90cc54](https://github.com/DIG-Network/dig-chia-sdk/commit/a90cc5431803404994bc15114290ec39f11e28f9))
+
 ### [0.0.1-alpha.99](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.98...v0.0.1-alpha.99) (2024-09-26)
 
 
