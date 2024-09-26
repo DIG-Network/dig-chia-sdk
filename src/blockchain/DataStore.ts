@@ -475,7 +475,11 @@ export class DataStore {
     });
   }
 
-  public async getRootHistory(): Promise<RootHistoryItem[]> {
+  public async getRootHistory(bustCache: boolean): Promise<RootHistoryItem[]> {
+    if (bustCache) {
+      rootHistoryCache.del(this.storeId);
+    }
+
     // Check if the root history is cached for this storeId
     const cachedHistory = rootHistoryCache.get<RootHistoryItem[]>(this.storeId);
     if (cachedHistory) {
