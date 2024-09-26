@@ -40,7 +40,7 @@ export class ContentServer {
   }
 
   // Method to get the payment address from the peer
-  public async getPaymentAddress(): Promise<string> {
+  public async getPaymentAddress(): Promise<string | null> {
     console.log(`Fetching payment address from peer ${this.ipAddress}...`);
 
     try {
@@ -50,7 +50,7 @@ export class ContentServer {
       console.error(
         `Failed to fetch payment address from ${this.ipAddress}: ${error.message}`
       );
-      throw new Error(`Failed to fetch payment address: ${error.message}`);
+      return null;
     }
   }
 

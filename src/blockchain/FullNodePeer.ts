@@ -240,9 +240,17 @@ export class FullNodePeer {
     const peers = await Promise.all(
       peerIPs.map(async (ip) => {
         if (ip) {
+          // Allow override of the trusted fullnode port if the override exists
+          let port = FULLNODE_PORT;
+          if (trustedNodeIp && ip === trustedNodeIp) {
+            const trustedFullNodePort = process.env.TRUSTED_FULLNODE_PORT;
+            if (trustedFullNodePort) {
+              port = parseInt(trustedFullNodePort);
+            }
+          }
           try {
             const peer = await Peer.new(
-              `${ip}:${FULLNODE_PORT}`,
+              `${ip}:${port}`,
               false,
               certFile,
               keyFile
