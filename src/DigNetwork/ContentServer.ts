@@ -1,7 +1,7 @@
+import axios, { AxiosRequestConfig } from "axios";
 import fs from "fs";
-import http from "http";
+import https from "https";
 import { URL } from "url";
-import { Readable } from "stream";
 import { getOrCreateSSLCerts } from "../utils/ssl";
 
 export class ContentServer {
@@ -10,6 +10,7 @@ export class ContentServer {
   private static certPath: string;
   private static keyPath: string;
   private static readonly port = 4161;
+  private static readonly inactivityTimeout = 5000; // Inactivity timeout in milliseconds (5 seconds)
 
   constructor(ipAddress: string, storeId: string) {
     this.ipAddress = ipAddress;
@@ -28,21 +29,18 @@ export class ContentServer {
     rootHash: string,
     challengeHex?: string
   ): Promise<string> {
-    // Construct the base URL
     let url = `https://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
 
-    // If a challenge is provided, append it as a query parameter
     if (challengeHex) {
       url += `?challenge=${challengeHex}`;
     }
 
-    return this.fetchWithRetries(url);
+    return this.fetch(url);
   }
 
   // Method to get the payment address from the peer
   public async getPaymentAddress(): Promise<string | null> {
     console.log(`Fetching payment address from peer ${this.ipAddress}...`);
-
     try {
       const wellKnown = await this.getWellKnown();
       return wellKnown.xch_address;
@@ -75,11 +73,9 @@ export class ContentServer {
   // Method to get the index of keys in a store
   public async getKeysIndex(rootHash?: string): Promise<any> {
     let udi = `chia.${this.storeId}`;
-
     if (rootHash) {
       udi += `.${rootHash}`;
     }
-
     const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}`;
     return this.fetchJson(url);
   }
@@ -88,13 +84,11 @@ export class ContentServer {
   public async headKey(
     key: string,
     rootHash?: string
-  ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
+  ): Promise<{ success: boolean; headers?: any }> {
     let udi = `chia.${this.storeId}`;
-
     if (rootHash) {
       udi += `.${rootHash}`;
     }
-
     const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}/${key}`;
     return this.head(url);
   }
@@ -102,14 +96,12 @@ export class ContentServer {
   // Method to check if a specific store exists (HEAD request)
   public async headStore(options?: { hasRootHash: string }): Promise<{
     success: boolean;
-    headers?: http.IncomingHttpHeaders;
+    headers?: any;
   }> {
     let url = `https://${this.ipAddress}:${ContentServer.port}/chia.${this.storeId}`;
-
     if (options?.hasRootHash) {
       url += `?hasRootHash=${options.hasRootHash}`;
     }
-
     return this.head(url);
   }
 
@@ -123,274 +115,98 @@ export class ContentServer {
     return false;
   }
 
-  public streamKey(key: string, rootHash?: string): Promise<Readable> {
-    let udi = `chia.${this.storeId}`;
-
-    if (rootHash) {
-      udi += `.${rootHash}`;
-    }
-
-    return new Promise((resolve, reject) => {
-      const url = `https://${this.ipAddress}:${ContentServer.port}/${udi}/${key}`;
-      const urlObj = new URL(url);
-
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || ContentServer.port,
-        path: urlObj.pathname + urlObj.search,
-        method: "GET",
+  // Helper method to perform HEAD requests using axios
+  private async head(url: string): Promise<{ success: boolean; headers?: any }> {
+    try {
+      const config = this.getAxiosConfig();
+      const response = await axios.head(url, config);
+      return {
+        success: response.status >= 200 && response.status < 300,
+        headers: response.headers,
       };
-
-      const request = http.request(requestOptions, (response) => {
-        if (response.statusCode === 200) {
-          resolve(response); // Resolve with the readable stream
-        } else if (response.statusCode === 301 || response.statusCode === 302) {
-          // Handle redirects
-          const redirectUrl = response.headers.location;
-          if (redirectUrl) {
-            this.streamKey(redirectUrl).then(resolve).catch(reject);
-          } else {
-            reject(new Error("Redirected without a location header"));
-          }
-        } else {
-          reject(
-            new Error(
-              `Failed to retrieve data from ${url}. Status code: ${response.statusCode}`
-            )
-          );
-        }
-      });
-
-      request.on("error", (error) => {
-        console.error(`GET Request error for ${url}:`, error);
-        reject(error);
-      });
-
-      request.end();
-    });
-  }
-
-  // Helper method to perform HEAD requests
-  private async head(
-    url: string,
-    maxRedirects: number = 5
-  ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
-    return new Promise((resolve, reject) => {
-      try {
-        // Parse the input URL
-        const urlObj = new URL(url);
-
-        const requestOptions = {
-          hostname: urlObj.hostname,
-          port:
-            urlObj.port ||
-            (urlObj.protocol === "http:" ? 80 : ContentServer.port),
-          path: urlObj.pathname + urlObj.search,
-          method: "HEAD",
-          key: fs.readFileSync(ContentServer.keyPath),
-          cert: fs.readFileSync(ContentServer.certPath),
-          rejectUnauthorized: false,
-        };
-
-        const request = http.request(requestOptions, (response) => {
-          const { statusCode, headers } = response;
-
-          // If status code is 2xx, return success
-          if (statusCode && statusCode >= 200 && statusCode < 300) {
-            resolve({ success: true, headers });
-          }
-          // Handle 3xx redirection
-          else if (
-            statusCode &&
-            statusCode >= 300 &&
-            statusCode < 400 &&
-            headers.location
-          ) {
-            if (maxRedirects > 0) {
-              let redirectUrl = headers.location;
-
-              // Check if the redirect URL is relative
-              if (!/^https?:\/\//i.test(redirectUrl)) {
-                // Resolve the relative URL based on the original URL
-                redirectUrl = new URL(redirectUrl, url).toString();
-                console.log(`Resolved relative redirect to: ${redirectUrl}`);
-              } else {
-                console.log(`Redirecting to: ${redirectUrl}`);
-              }
-
-              // Recursively follow the redirection
-              this.head(redirectUrl, maxRedirects - 1)
-                .then(resolve)
-                .catch(reject);
-            } else {
-              reject({ success: false, message: "Too many redirects" });
-            }
-          } else {
-            // For other status codes, consider it a failure
-            resolve({ success: false });
-          }
-        });
-
-        request.on("error", (error) => {
-          console.error(`HEAD ${url}:`, error.message);
-          reject({ success: false });
-        });
-
-        request.end();
-      } catch (err) {
-        console.error(`Invalid URL: ${url}`, err);
-        reject({ success: false, message: "Invalid URL" });
-      }
-    });
+    } catch (error) {
+      return { success: false };
+    }
   }
 
   // Helper method to fetch JSON data from a URL
   private async fetchJson(url: string): Promise<any> {
-    const response = await this.fetchWithRetries(url);
+    const response = await this.fetch(url);
     return JSON.parse(response);
   }
 
-  // Helper method to fetch content with retries and redirection handling
-  private async fetchWithRetries(url: string): Promise<string> {
-    let attempt = 0;
-    const maxRetries = 1;
-    const initialDelay = 2000; // 2 seconds
-    const maxDelay = 10000; // 10 seconds
-    const delayMultiplier = 1.5;
-    let delay = initialDelay;
+  // Core method to fetch content from a URL with a 5-second inactivity timeout, handling redirects
+  private async fetch(url: string): Promise<string> {
+    const config = this.getAxiosConfig();
 
-    while (attempt < maxRetries) {
-      try {
-        return await this.fetch(url);
-      } catch (error: any) {
-        if (attempt < maxRetries - 1) {
-          console.warn(
-            `Attempt ${attempt + 1} failed: ${error.message}. Retrying in ${
-              delay / 1000
-            } seconds...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          delay = Math.min(maxDelay, delay * delayMultiplier);
-        } else {
-          console.error(`Failed to retrieve data from ${url}. Aborting.`);
-          throw new Error(`Failed to retrieve data: ${error.message}`);
-        }
-      }
-      attempt++;
-    }
-    throw new Error(
-      `Failed to retrieve data from ${url} after ${maxRetries} attempts.`
-    );
-  }
+    // Create a cancel token for the inactivity timeout
+    const source = axios.CancelToken.source();
 
-  // Core method to fetch content from a URL with a 5-second inactivity timeout
-  private async fetch(url: string, maxRedirects: number = 5): Promise<string> {
     return new Promise((resolve, reject) => {
-      const urlObj = new URL(url);
-      const timeoutDuration = 5000; // 5 seconds
+      let timeout: NodeJS.Timeout | null = null;
 
-      let timeout: NodeJS.Timeout | null = null; // Initialize timeout
-
-      const requestOptions = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || ContentServer.port,
-        path: urlObj.pathname + urlObj.search, // Include query params
-        method: "GET",
-        key: fs.readFileSync(ContentServer.keyPath),
-        cert: fs.readFileSync(ContentServer.certPath),
-        rejectUnauthorized: false,
-      };
-
-      const request = http.request(requestOptions, (response) => {
-        let data = "";
-
-        // Set timeout for inactivity
-        timeout = setTimeout(() => {
-          console.error(
-            `Request timeout: No data received for ${
-              timeoutDuration / 1000
-            } seconds.`
-          );
-          request.destroy(); // Use destroy instead of abort
-          reject(
-            new Error(
-              `Request timed out after ${
-                timeoutDuration / 1000
-              } seconds of inactivity`
-            )
-          );
-        }, timeoutDuration);
-
-        const resetTimeout = () => {
-          if (timeout) {
-            clearTimeout(timeout);
-          }
-          timeout = setTimeout(() => {
-            console.error(
-              `Request timeout: No data received for ${
-                timeoutDuration / 1000
-              } seconds.`
-            );
-            request.destroy(); // Use destroy instead of abort
-            reject(
-              new Error(
-                `Request timed out after ${
-                  timeoutDuration / 1000
-                } seconds of inactivity`
-              )
-            );
-          }, timeoutDuration);
-        };
-
-        if (response.statusCode === 200) {
-          response.on("data", (chunk) => {
-            data += chunk;
-            resetTimeout(); // Reset the timeout every time data is received
-          });
-
-          response.on("end", () => {
-            if (timeout) {
-              clearTimeout(timeout);
-            }
-            resolve(data);
-          });
-        } else if (
-          (response.statusCode === 301 || response.statusCode === 302) &&
-          response.headers.location
-        ) {
-          // Handle redirects
-          if (maxRedirects > 0) {
-            const redirectUrl = new URL(response.headers.location, url); // Resolve relative URLs based on the original URL
-            if (timeout) {
-              clearTimeout(timeout);
-            }
-            this.fetch(redirectUrl.toString(), maxRedirects - 1)
-              .then(resolve)
-              .catch(reject);
-          } else {
-            reject(new Error("Too many redirects"));
-          }
-        } else {
-          if (timeout) {
-            clearTimeout(timeout);
-          }
-          reject(
-            new Error(
-              `Failed to retrieve data from ${url}. Status code: ${response.statusCode}`
-            )
-          );
-        }
-      });
-
-      request.on("error", (error: NodeJS.ErrnoException) => {
+      const resetTimeout = () => {
         if (timeout) {
           clearTimeout(timeout);
         }
-        console.error(`GET ${url}:`, error.message);
-        reject(error);
-      });
+        timeout = setTimeout(() => {
+          source.cancel(
+            `Request timed out after ${
+              ContentServer.inactivityTimeout / 1000
+            } seconds of inactivity`
+          );
+        }, ContentServer.inactivityTimeout);
+      };
 
-      request.end();
+      axios
+        .get(url, {
+          ...config,
+          cancelToken: source.token,
+          responseType: "stream", // Use stream to track data transfer
+          maxRedirects: 5, // Axios follows up to 5 redirects by default
+        })
+        .then((response) => {
+          let data = "";
+
+          response.data.on("data", (chunk: any) => {
+            data += chunk;
+            resetTimeout(); // Reset the timeout when data is received
+          });
+
+          response.data.on("end", () => {
+            if (timeout) {
+              clearTimeout(timeout); // Clear timeout on stream end
+            }
+            resolve(data);
+          });
+
+          response.data.on("error", (error: any) => {
+            if (timeout) {
+              clearTimeout(timeout);
+            }
+            reject(error);
+          });
+        })
+        .catch((error: any) => {
+          if (axios.isCancel(error)) {
+            console.error("Request canceled:", error.message);
+          } else {
+            console.error(`Failed to retrieve data from ${url}:`, error.message);
+          }
+          reject(error);
+        });
     });
+  }
+
+  // Helper method to configure axios with HTTPS settings
+  private getAxiosConfig(): AxiosRequestConfig {
+    return {
+      httpsAgent: new https.Agent({
+        cert: fs.readFileSync(ContentServer.certPath),
+        key: fs.readFileSync(ContentServer.keyPath),
+        rejectUnauthorized: false,
+      }),
+      timeout: 0, // Disable axios timeout (we're using inactivity timeout)
+    };
   }
 }

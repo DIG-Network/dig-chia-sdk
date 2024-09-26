@@ -1,23 +1,23 @@
-// Import necessary modules and dependencies
 import axios, { AxiosRequestConfig } from "axios";
-import fs from "fs";
-import path from "path";
-import FormData from "form-data";
-import { Wallet, DataStore } from "../blockchain";
-import { getOrCreateSSLCerts } from "../utils/ssl";
-import { promptCredentials } from "../utils/credentialsUtils";
-import https from "https";
 import cliProgress from "cli-progress";
-import { green, red, blue, yellow, cyan } from "colorette";
-import { STORE_PATH } from "../utils/config";
-import { getFilePathFromSha256 } from "../utils/hashUtils";
-import { createSpinner } from "nanospinner";
-import ProgressStream from "progress-stream";
-import { PassThrough } from "stream";
-import { asyncPool } from "../utils/asyncPool";
+import FormData from "form-data";
+import fs from "fs";
 import fsExtra from "fs-extra";
+import https from "https";
 import os from "os";
+import path from "path";
+import ProgressStream from "progress-stream";
+
+import { asyncPool } from "../utils/asyncPool";
+import { createSpinner } from "nanospinner";
+import { getFilePathFromSha256 } from "../utils/hashUtils";
+import { getOrCreateSSLCerts } from "../utils/ssl";
+import { green, red, blue, yellow, cyan } from "colorette";
 import { merkleIntegrityCheck } from "../utils/merkle";
+import { PassThrough } from "stream";
+import { promptCredentials } from "../utils/credentialsUtils";
+import { STORE_PATH } from "../utils/config";
+import { Wallet, DataStore } from "../blockchain";
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -43,6 +43,7 @@ export class PropagationServer {
   password: string | undefined;
 
   private static readonly port = 4159; // Static port used for all requests
+  private static readonly inactivityTimeout = 5000; // Inactivity timeout in milliseconds (5 seconds)
 
   constructor(ipAddress: string, storeId: string) {
     this.storeId = storeId;
@@ -75,6 +76,34 @@ export class PropagationServer {
       key: fs.readFileSync(this.keyPath),
       rejectUnauthorized: false,
     });
+  }
+
+  /**
+   * Adds a custom inactivity timeout for large file transfers.
+   */
+  addInactivityTimeout(stream: PassThrough, timeoutMs: number) {
+    let timeoutId: NodeJS.Timeout | undefined;
+
+    const resetTimeout = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        stream.destroy(
+          new Error(`Inactivity timeout after ${timeoutMs / 1000} seconds`)
+        );
+      }, timeoutMs);
+    };
+
+    // Reset timeout every time data is received
+    stream.on("data", resetTimeout);
+
+    // Set the initial timeout
+    resetTimeout();
+
+    // Clear the timeout when the stream ends
+    stream.on("end", () => clearTimeout(timeoutId));
+    stream.on("error", () => clearTimeout(timeoutId)); // Handle errors
+
+    return stream;
   }
 
   /**
@@ -270,8 +299,11 @@ export class PropagationServer {
         progressBar!.update(progress.transferred);
       });
 
-      // Create a PassThrough stream
-      const passThroughStream = new PassThrough();
+      // Add inactivity timeout to the progress stream
+      const passThroughStream = this.addInactivityTimeout(
+        new PassThrough(),
+        PropagationServer.inactivityTimeout
+      );
 
       // Pipe the read stream through the progress stream into the PassThrough stream
       fileReadStream.pipe(progressStream).pipe(passThroughStream);
@@ -472,7 +504,13 @@ export class PropagationServer {
         progressBar!.update(progress.transferred);
       });
 
-      response.data.pipe(progressStream);
+      // Add inactivity timeout to the progress stream
+      const passThroughStream = this.addInactivityTimeout(
+        new PassThrough(),
+        PropagationServer.inactivityTimeout
+      );
+
+      response.data.pipe(progressStream).pipe(passThroughStream);
 
       progressStream.on("data", (chunk: Buffer) => {
         dataBuffers.push(chunk);
@@ -592,7 +630,16 @@ export class PropagationServer {
         progressBar!.update(progress.transferred);
       });
 
-      response.data.pipe(progressStream).pipe(fileWriteStream);
+      // Add inactivity timeout to the progress stream
+      const passThroughStream = this.addInactivityTimeout(
+        new PassThrough(),
+        PropagationServer.inactivityTimeout
+      );
+
+      response.data
+        .pipe(progressStream)
+        .pipe(passThroughStream)
+        .pipe(fileWriteStream);
 
       // Wait for both the file write stream and the progress stream to finish
       await Promise.all([
