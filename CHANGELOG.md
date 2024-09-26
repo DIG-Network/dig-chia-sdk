@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.98](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.97...v0.0.1-alpha.98) (2024-09-26)
+
+
+### Features
+
+* allow override of the ssl location for fullnode peers ([a16f720](https://github.com/DIG-Network/dig-chia-sdk/commit/a16f720126a10f54dd55cc0454952701e0cae317))
+
 ### [0.0.1-alpha.97](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.96...v0.0.1-alpha.97) (2024-09-26)
 
 
