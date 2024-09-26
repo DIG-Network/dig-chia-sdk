@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.95](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.94...v0.0.1-alpha.95) (2024-09-26)
+
+
+### Bug Fixes
+
+* environment export ([c4fe1c3](https://github.com/DIG-Network/dig-chia-sdk/commit/c4fe1c33e6aebc42aa7d2dfd520e5994b16cc7a2))
+
 ### [0.0.1-alpha.94](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.93...v0.0.1-alpha.94) (2024-09-26)
 
 
