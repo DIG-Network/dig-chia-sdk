@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.93](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.92...v0.0.1-alpha.93) (2024-09-26)
+
+
+### Features
+
+* add Environment class ([368d298](https://github.com/DIG-Network/dig-chia-sdk/commit/368d298261cc0ad061ee77647c3b3abefe404bde))
+
 ### [0.0.1-alpha.92](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.91...v0.0.1-alpha.92) (2024-09-26)
 
 
