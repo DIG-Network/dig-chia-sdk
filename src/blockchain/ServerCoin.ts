@@ -55,7 +55,7 @@ export class ServerCoin {
         publicSyntheticKey,
         serverCoinCreationCoins,
         epochBasedHint,
-        [peerIp],
+        [peerIp, publicSyntheticKey.toString("hex")],
         BigInt(serverCoinCollateral),
         BigInt(1000000)
       );
@@ -223,6 +223,10 @@ export class ServerCoin {
     for (const coinState of filteredCoinStates) {
       const serverCoin = await peer.fetchServerCoin(coinState, maxClvmCost);
       const peerUrl = serverCoin.memoUrls[0];
+      // The second memo URL is the public key
+      // We will utilize this for future features
+      const publicKey = serverCoin.memoUrls[1];
+      
       if (!blacklist.includes(peerUrl)) {
         serverCoinPeers.add(peerUrl);
       }
