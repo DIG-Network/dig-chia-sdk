@@ -9,6 +9,7 @@ import {
 import { Wallet } from "./Wallet";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { FileCache } from "../utils/FileCache";
+import { Environment } from "../utils/Environment";
 
 export const DEFAULT_FEE_COIN_COST = 64_000_000;
 
@@ -94,7 +95,7 @@ export const selectUnspentCoins = async (
     Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
   );
 
-  if (process.env.DIG_DEBUG === "1") {
+  if (Environment.DEBUG) {
     console.log("Unspent Coins:", coinsResp); // Debugging
   }
 
@@ -105,14 +106,14 @@ export const selectUnspentCoins = async (
     (coin) => !omitCoinIds.includes(getCoinId(coin).toString("hex"))
   );
 
-  if (process.env.DIG_DEBUG === "1") {
+  if (Environment.DEBUG) {
     console.log("Unspent Coins after filtering:", filteredUnspentCoins); // Debugging
   }
 
   // Select coins needed for the transaction
   const selectedCoins = selectCoins(filteredUnspentCoins, feeBigInt + coinAmount);
 
-  if (process.env.DIG_DEBUG === "1") {
+  if (Environment.DEBUG) {
     console.log("Selected Coins:", selectedCoins); // Debugging
   }
 

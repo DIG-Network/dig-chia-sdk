@@ -1,10 +1,10 @@
 import nconf from "nconf";
 import fs from "fs-extra";
 import path from "path";
-import os from "os";
 import { USER_DIR_PATH } from "./config";
+import { Environment } from "./Environment";
 
-const CONF_FOLDER_PATH = process.env.DIG_FOLDER_PATH || USER_DIR_PATH;
+const CONF_FOLDER_PATH = Environment.DIG_FOLDER_PATH || USER_DIR_PATH;
 
 export class NconfManager {
   private configFilePath: string;
