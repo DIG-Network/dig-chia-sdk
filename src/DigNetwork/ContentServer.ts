@@ -253,7 +253,7 @@ export class ContentServer {
   // Helper method to fetch content with retries and redirection handling
   private async fetchWithRetries(url: string): Promise<string> {
     let attempt = 0;
-    const maxRetries = 5;
+    const maxRetries = 1;
     const initialDelay = 2000; // 2 seconds
     const maxDelay = 10000; // 10 seconds
     const delayMultiplier = 1.5;
@@ -283,10 +283,13 @@ export class ContentServer {
     );
   }
 
-  // Core method to fetch content from a URL
+  // Core method to fetch content from a URL with a 5-second inactivity timeout
   private async fetch(url: string, maxRedirects: number = 5): Promise<string> {
     return new Promise((resolve, reject) => {
       const urlObj = new URL(url);
+      const timeoutDuration = 5000; // 5 seconds
+
+      let timeout: NodeJS.Timeout | null = null; // Initialize timeout
 
       const requestOptions = {
         hostname: urlObj.hostname,
@@ -301,12 +304,54 @@ export class ContentServer {
       const request = http.request(requestOptions, (response) => {
         let data = "";
 
+        // Set timeout for inactivity
+        timeout = setTimeout(() => {
+          console.error(
+            `Request timeout: No data received for ${
+              timeoutDuration / 1000
+            } seconds.`
+          );
+          request.destroy(); // Use destroy instead of abort
+          reject(
+            new Error(
+              `Request timed out after ${
+                timeoutDuration / 1000
+              } seconds of inactivity`
+            )
+          );
+        }, timeoutDuration);
+
+        const resetTimeout = () => {
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          timeout = setTimeout(() => {
+            console.error(
+              `Request timeout: No data received for ${
+                timeoutDuration / 1000
+              } seconds.`
+            );
+            request.destroy(); // Use destroy instead of abort
+            reject(
+              new Error(
+                `Request timed out after ${
+                  timeoutDuration / 1000
+                } seconds of inactivity`
+              )
+            );
+          }, timeoutDuration);
+        };
+
         if (response.statusCode === 200) {
           response.on("data", (chunk) => {
             data += chunk;
+            resetTimeout(); // Reset the timeout every time data is received
           });
 
           response.on("end", () => {
+            if (timeout) {
+              clearTimeout(timeout);
+            }
             resolve(data);
           });
         } else if (
@@ -316,9 +361,9 @@ export class ContentServer {
           // Handle redirects
           if (maxRedirects > 0) {
             const redirectUrl = new URL(response.headers.location, url); // Resolve relative URLs based on the original URL
-
-            // Recursively follow the redirect, passing the same query params
-            // console.log(`Redirecting to: ${redirectUrl.toString()}`);
+            if (timeout) {
+              clearTimeout(timeout);
+            }
             this.fetch(redirectUrl.toString(), maxRedirects - 1)
               .then(resolve)
               .catch(reject);
@@ -326,6 +371,9 @@ export class ContentServer {
             reject(new Error("Too many redirects"));
           }
         } else {
+          if (timeout) {
+            clearTimeout(timeout);
+          }
           reject(
             new Error(
               `Failed to retrieve data from ${url}. Status code: ${response.statusCode}`
@@ -334,7 +382,10 @@ export class ContentServer {
         }
       });
 
-      request.on("error", (error) => {
+      request.on("error", (error: NodeJS.ErrnoException) => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
         console.error(`GET ${url}:`, error.message);
         reject(error);
       });
