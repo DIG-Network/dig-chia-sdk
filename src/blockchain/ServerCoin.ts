@@ -15,7 +15,7 @@ import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
 import NodeCache from "node-cache";
-import { getPublicIpAddress } from '../utils/network';
+import { getPublicIpAddress } from "../utils/network";
 import { Environment } from "../utils/Environment";
 
 const serverCoinCollateral = 300_000_000;
@@ -34,7 +34,7 @@ export class ServerCoin {
   }
 
   // Create a new server coin for the current epoch
-  public async createForEpoch(peerIp: string): Promise<ServerCoinDriver> {
+  public async createForEpoch(peerIp: string, rootHash: string): Promise<ServerCoinDriver> {
     try {
       const peer = await FullNodePeer.connect();
       const wallet = await Wallet.load("default");
@@ -45,7 +45,7 @@ export class ServerCoin {
         BigInt(1000000)
       );
 
-      const { epoch: currentEpoch} = ServerCoin.getCurrentEpoch();
+      const { epoch: currentEpoch } = ServerCoin.getCurrentEpoch();
       const epochBasedHint = morphLauncherId(
         Buffer.from(this.storeId, "hex"),
         BigInt(currentEpoch)
@@ -74,7 +74,7 @@ export class ServerCoin {
         if (err.includes("no spendable coins")) {
           console.log("No coins available. Will try again in 5 seconds...");
           await new Promise((resolve) => setTimeout(resolve, 5000));
-          return this.createForEpoch(peerIp);
+          return this.createForEpoch(peerIp, rootHash);
         }
         throw new Error(err);
       }
@@ -83,7 +83,8 @@ export class ServerCoin {
       await this.saveServerCoinData(
         newServerCoin.serverCoin,
         currentEpoch,
-        peerIp
+        peerIp,
+        rootHash
       );
 
       return newServerCoin.serverCoin;
@@ -96,7 +97,8 @@ export class ServerCoin {
   public async saveServerCoinData(
     serverCoin: ServerCoinDriver,
     epoch: number,
-    peerIp: string
+    peerIp: string,
+    rootHash: string,
   ): Promise<void> {
     const newServerCoinData: ServerCoinData = {
       coin: {
@@ -105,7 +107,8 @@ export class ServerCoin {
         parentCoinInfo: serverCoin.coin.parentCoinInfo.toString("hex"),
       },
       createdAt: new Date().toISOString(),
-      epoch: epoch,
+      epoch,
+      rootHash,
     };
 
     const serverCoins = await this.getServerCoinsForStore(peerIp);
@@ -185,7 +188,10 @@ export class ServerCoin {
     );
   }
 
-  public async getAllEpochPeers(epoch: number, blacklist: string[] = []): Promise<string[]> {
+  public async getAllEpochPeers(
+    epoch: number,
+    blacklist: string[] = []
+  ): Promise<string[]> {
     const cacheKey = `serverCoinPeers-${this.storeId}-${epoch}`;
 
     // Check if the result is already cached
@@ -194,12 +200,18 @@ export class ServerCoin {
       return cachedPeers;
     }
 
-    const epochBasedHint = morphLauncherId(Buffer.from(this.storeId, "hex"), BigInt(epoch));
+    const epochBasedHint = morphLauncherId(
+      Buffer.from(this.storeId, "hex"),
+      BigInt(epoch)
+    );
 
     const peer = await FullNodePeer.connect();
     const maxClvmCost = BigInt(11_000_000_000);
 
-    const hintedCoinStates = await peer.getHintedCoinStates(epochBasedHint, false);
+    const hintedCoinStates = await peer.getHintedCoinStates(
+      epochBasedHint,
+      false
+    );
 
     const filteredCoinStates = hintedCoinStates.filter(
       (coinState) => coinState.coin.amount >= serverCoinCollateral
@@ -254,7 +266,7 @@ export class ServerCoin {
     if (myIp) {
       blacklist.push(myIp);
     }
-    
+
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
     if (Environment.DEBUG) {
       console.log("Server Coin Peers: ", serverCoinPeers);
@@ -279,14 +291,45 @@ export class ServerCoin {
         (coin) => coin.epoch === currentEpoch
       );
 
+      const dataStore = DataStore.from(this.storeId);
+      const rootHistory = await dataStore.getRootHistory(true);
+      const lastRoot = _.last(rootHistory);
+
+      if (!lastRoot) {
+        throw new Error('Cant get the last root on chain, something is wrong.');
+      }
+
       if (existingCoin) {
+        // nothing to do
+        if (lastRoot?.synced && lastRoot?.root_hash === existingCoin.rootHash) {
+          return;
+        }
+
+        // everything is fine, lets just update the roothash for tracking
+        if (lastRoot?.synced && lastRoot?.root_hash !== existingCoin.rootHash) {
+          existingCoin.rootHash = lastRoot.root_hash;
+          // Update the conf with the modified server coin
+          await ServerCoin.serverCoinManager.setConfigValue(
+            `${this.storeId}:${peerIp}`,
+            serverCoins
+          );
+          return;
+        }
+
+        // If not synced, melt the coin, a new one will be created when synced up
+        // this helps prevent penalties for not having a valid peer registered
+        await this.melt(currentEpoch, peerIp);
+      }
+
+      // Don't create a server coin until you're synced up
+      if (!_.last(rootHistory)?.synced) {
         return;
       }
 
       console.log(
         `No server coin found for epoch ${currentEpoch}. Creating new server coin...`
       );
-      const serverCoin = await this.createForEpoch(peerIp);
+      const serverCoin = await this.createForEpoch(peerIp, lastRoot?.root_hash);
 
       const newServerCoinData: ServerCoinData = {
         coin: {
@@ -296,6 +339,7 @@ export class ServerCoin {
         },
         createdAt: new Date().toISOString(),
         epoch: currentEpoch,
+        rootHash: _.last(rootHistory)?.root_hash || "",
       };
 
       await FullNodePeer.waitForConfirmation(serverCoin.coin.parentCoinInfo);
