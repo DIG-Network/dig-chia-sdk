@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.102](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.101...v0.0.1-alpha.102) (2024-09-26)
+
+
+### Features
+
+* support ip6 on content server, propagation server and incentive server ([90ac77a](https://github.com/DIG-Network/dig-chia-sdk/commit/90ac77a6e5a62737de1d0f58ef77bece3fe02af9))
+
 ### [0.0.1-alpha.101](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.100...v0.0.1-alpha.101) (2024-09-26)
 
 

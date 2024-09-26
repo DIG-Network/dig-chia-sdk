@@ -1,6 +1,7 @@
 import https from "https";
 import { URL } from "url";
 import { IncentiveProgramData } from "../types";
+import { formatHost } from "../utils/network";
 
 export class IncentiveServer {
   private ipAddress: string;
@@ -12,35 +13,35 @@ export class IncentiveServer {
 
   // Method to create a new incentive program
   public async createIncentiveProgram(data: IncentiveProgramData): Promise<void> {
-    const url = `https://${this.ipAddress}:${this.port}/incentive`;
+    const url = `https://${formatHost(this.ipAddress)}:${this.port}/incentive`;
 
     await this.makeRequest(url, "POST", data);
   }
 
   // Method to update an existing incentive program
   public async updateIncentiveProgram(data: IncentiveProgramData): Promise<void> {
-    const url = `https://${this.ipAddress}:${this.port}/incentive`;
+    const url = `https://${formatHost(this.ipAddress)}:${this.port}/incentive`;
 
     await this.makeRequest(url, "PUT", data);
   }
 
   // Method to delete an incentive program by storeId
   public async deleteIncentiveProgram(storeId: string): Promise<void> {
-    const url = `https://${this.ipAddress}:${this.port}/incentive`;
+    const url = `https://${formatHost(this.ipAddress)}:${this.port}/incentive`;
 
     await this.makeRequest(url, "DELETE", { storeId });
   }
 
   // Method to get all incentive programs
   public async getAllIncentivePrograms(): Promise<IncentiveProgramData[]> {
-    const url = `https://${this.ipAddress}:${this.port}/incentive`;
+    const url = `https://${formatHost(this.ipAddress)}:${this.port}/incentive`;
 
     return this.makeRequest(url, "GET");
   }
 
   // Method to get a specific incentive program by storeId
   public async getIncentiveProgram(storeId: string): Promise<IncentiveProgramData> {
-    const url = `https://${this.ipAddress}:${this.port}/incentive/${storeId}`;
+    const url = `https://${formatHost(this.ipAddress)}:${this.port}/incentive/${storeId}`;
 
     return this.makeRequest(url, "GET");
   }

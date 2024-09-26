@@ -18,6 +18,7 @@ import { PassThrough } from "stream";
 import { promptCredentials } from "../utils/credentialsUtils";
 import { STORE_PATH } from "../utils/config";
 import { Wallet, DataStore } from "../blockchain";
+import { formatHost } from '../utils/network';
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -120,7 +121,7 @@ export class PropagationServer {
         httpsAgent: this.createHttpsAgent(),
       };
 
-      let url = `https://${this.ipAddress}:${PropagationServer.port}/${this.storeId}`;
+      let url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/${this.storeId}`;
       if (rootHash) {
         url += `?hasRootHash=${rootHash}`;
       }
@@ -193,7 +194,7 @@ export class PropagationServer {
         };
       }
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}?roothash=${rootHash}`;
+      const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/upload/${this.storeId}?roothash=${rootHash}`;
       const response = await axios.post(url, formData, config);
 
       this.sessionId = response.data.sessionId;
@@ -222,7 +223,7 @@ export class PropagationServer {
         httpsAgent: this.createHttpsAgent(),
       };
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
+      const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${filename}`;
       const response = await axios.head(url, config);
 
       // Check for 'x-file-exists' header
@@ -326,7 +327,7 @@ export class PropagationServer {
         maxBodyLength: Infinity,
       };
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${dataPath}`;
+      const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/upload/${this.storeId}/${this.sessionId}/${dataPath}`;
 
       // Create a promise that resolves when the progress stream ends
       const progressPromise = new Promise<void>((resolve, reject) => {
@@ -368,7 +369,7 @@ export class PropagationServer {
             : undefined,
       };
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/commit/${this.storeId}/${this.sessionId}`;
+      const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/commit/${this.storeId}/${this.sessionId}`;
       const response = await axios.post(url, {}, config);
 
       spinner.success({
@@ -453,7 +454,7 @@ export class PropagationServer {
    * Logs progress using a local cli-progress bar.
    */
   async fetchFile(dataPath: string): Promise<Buffer> {
-    const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
+    const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
     const config: AxiosRequestConfig = {
       responseType: "stream",
       httpsAgent: this.createHttpsAgent(),
@@ -544,7 +545,7 @@ export class PropagationServer {
         httpsAgent: this.createHttpsAgent(),
       };
 
-      const url = `https://${this.ipAddress}:${PropagationServer.port}/store/${this.storeId}/${rootHash}/${dataPath}`;
+      const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/store/${this.storeId}/${rootHash}/${dataPath}`;
       const response = await axios.head(url, config);
 
       // Check the headers for file existence and size
@@ -574,7 +575,7 @@ export class PropagationServer {
     rootHash: string,
     baseDir: string
   ) {
-    const url = `https://${this.ipAddress}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
+    const url = `https://${formatHost(this.ipAddress)}:${PropagationServer.port}/fetch/${this.storeId}/${dataPath}`;
     let downloadPath = path.join(baseDir, dataPath);
 
     // Ensure that the directory for the file exists
