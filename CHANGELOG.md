@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.90](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.89...v0.0.1-alpha.90) (2024-09-26)
+
+
+### Features
+
+* add the ability to bust root history cache ([5c708c9](https://github.com/DIG-Network/dig-chia-sdk/commit/5c708c9af08a894bf8e91b125f91b1c9021d9209))
+
+### [0.0.1-alpha.89](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.88...v0.0.1-alpha.89) (2024-09-26)
+
+
+### Features
+
+* add the ability to bust root history cache ([a32fbb0](https://github.com/DIG-Network/dig-chia-sdk/commit/a32fbb00f5f0c081eec349c817bff70c7937fae5))
+
 ### [0.0.1-alpha.88](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.87...v0.0.1-alpha.88) (2024-09-25)
 
 
