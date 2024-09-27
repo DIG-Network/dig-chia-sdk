@@ -1,6 +1,6 @@
 {
   "name": "@dignetwork/dig-sdk",
-  "version": "0.0.1-alpha.102",
+  "version": "0.0.1-alpha.103",
   "description": "",
   "type": "commonjs",
   "main": "./dist/index.js",
@@ -25,14 +25,13 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@dignetwork/datalayer-driver": "^0.1.25",
+    "@dignetwork/datalayer-driver": "^0.1.28",
     "archiver": "^7.0.1",
     "axios": "^1.7.7",
     "bip39": "^3.1.0",
     "chia-bls": "^1.0.2",
     "chia-config-loader": "^1.0.1",
     "chia-root-resolver": "^1.0.0",
-    "chia-server-coin": "^0.0.5",
     "chia-wallet": "^1.0.18",
     "cli-progress": "^3.12.0",
     "colorette": "^2.0.20",

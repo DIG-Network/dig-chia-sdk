@@ -1,8 +1,7 @@
 import path from "path";
 import os from "os";
 import fs from "fs";
-import { Peer } from "@dignetwork/datalayer-driver";
-import { Tls } from "chia-server-coin";
+import { Peer, Tls } from "@dignetwork/datalayer-driver";
 import { resolve4 } from "dns/promises";
 import net from "net";
 import { memoize } from "lodash";
@@ -29,7 +28,9 @@ export class FullNodePeer {
   private static deprioritizedIps: Set<string> = new Set(); // New set for deprioritized IPs
 
   static {
-    FullNodePeer.memoizedFetchNewPeerIPs = memoize(FullNodePeer.fetchNewPeerIPs);
+    FullNodePeer.memoizedFetchNewPeerIPs = memoize(
+      FullNodePeer.fetchNewPeerIPs
+    );
   }
 
   private constructor(peer: Peer) {
@@ -132,7 +133,9 @@ export class FullNodePeer {
           }
         }
       } catch (error: any) {
-        console.error(`Failed to resolve IPs from ${DNS_HOST}: ${error.message}`);
+        console.error(
+          `Failed to resolve IPs from ${DNS_HOST}: ${error.message}`
+        );
       }
     }
     throw new Error("No reachable IPs found in any DNS records.");
@@ -178,7 +181,9 @@ export class FullNodePeer {
             const timeoutPromise = new Promise<null>((_, reject) => {
               timeoutId = setTimeout(() => {
                 FullNodePeer.cachedPeer = null;
-                reject(new Error("Operation timed out. Reconnecting to a new peer."));
+                reject(
+                  new Error("Operation timed out. Reconnecting to a new peer.")
+                );
               }, 60000); // 1 minute
             });
 
@@ -197,12 +202,17 @@ export class FullNodePeer {
               return result;
             } catch (error: any) {
               // If the error is WebSocket-related or timeout, reset the peer
-              if (error.message.includes("WebSocket") || error.message.includes("Operation timed out")) {
+              if (
+                error.message.includes("WebSocket") ||
+                error.message.includes("Operation timed out")
+              ) {
                 FullNodePeer.cachedPeer = null;
                 // @ts-ignore
                 FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
                 FullNodePeer.deprioritizedIps.clear();
-                console.info(`Fullnode Peer error, reconnecting to a new peer...`);
+                console.info(
+                  `Fullnode Peer error, reconnecting to a new peer...`
+                );
                 const newPeer = await FullNodePeer.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
@@ -233,7 +243,7 @@ export class FullNodePeer {
       fs.mkdirSync(sslFolder, { recursive: true });
     }
 
-    new Tls(certFile, keyFile);
+    const tls = new Tls(certFile, keyFile);
 
     const peerIPs = await FullNodePeer.getPeerIPs();
     const trustedNodeIp = Environment.TRUSTED_FULLNODE || null;
@@ -250,15 +260,12 @@ export class FullNodePeer {
             }
           }
           try {
-            const peer = await Peer.new(
-              `${ip}:${port}`,
-              false,
-              certFile,
-              keyFile
-            );
+            const peer = await Peer.new(`${ip}:${port}`, false, tls);
             return FullNodePeer.createPeerProxy(peer);
           } catch (error: any) {
-            console.error(`Failed to create peer for IP ${ip}: ${error.message}`);
+            console.error(
+              `Failed to create peer for IP ${ip}: ${error.message}`
+            );
             return null;
           }
         }
@@ -299,7 +306,9 @@ export class FullNodePeer {
       (height, index) =>
         height === highestPeak &&
         !FullNodePeer.deprioritizedIps.has(peerIPs[index]) && // Exclude deprioritized IPs
-        (peerIPs[index] === LOCALHOST || peerIPs[index] === trustedNodeIp || peerIPs[index] === CHIA_NODES_HOST)
+        (peerIPs[index] === LOCALHOST ||
+          peerIPs[index] === trustedNodeIp ||
+          peerIPs[index] === CHIA_NODES_HOST)
     );
 
     // If LOCALHOST, TRUSTED_NODE_IP, or CHIA_NODES_HOST don't have the highest peak, select any peer with the highest peak
