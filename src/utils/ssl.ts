@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { Tls } from "chia-server-coin";
+import { Tls } from "@dignetwork/datalayer-driver";
 import { USER_DIR_PATH }  from './config';
 
 export const getOrCreateSSLCerts = () => {
