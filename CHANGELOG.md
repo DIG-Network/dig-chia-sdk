@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.104](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.103...v0.0.1-alpha.104) (2024-09-30)
+
+
+### Bug Fixes
+
+* expose async pool to sdk ([ffb75d9](https://github.com/DIG-Network/dig-chia-sdk/commit/ffb75d9390e47728eaa6e5051e5c7e6dd2ca29e4))
+
 ### [0.0.1-alpha.103](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.102...v0.0.1-alpha.103) (2024-09-27)
 
 ### [0.0.1-alpha.102](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.101...v0.0.1-alpha.102) (2024-09-26)
