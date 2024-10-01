@@ -1,10 +1,8 @@
-import { setInterval } from "timers";
 import { FullNodePeer } from "./FullNodePeer";
 import { FileCache } from "../utils";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import { withTimeout } from "../utils";
 import * as lockfile from 'proper-lockfile';
-import * as fs from 'fs';
 import * as path from 'path';
 import { DIG_FOLDER_PATH } from "../utils";
 
@@ -26,7 +24,8 @@ export class StoreInfoCacheUpdater {
     // Construct lock file path using the path module
     this.lockFilePath = path.join(DIG_FOLDER_PATH, 'store-info-cache.lock');
 
-    this.startCacheUpdater();
+    // Start the cache updater using setTimeout
+    this.scheduleNextUpdate();
 
     // Set up process exit handlers for cleanup
     this.setupExitHandlers();
@@ -39,24 +38,34 @@ export class StoreInfoCacheUpdater {
     return StoreInfoCacheUpdater.instance;
   }
 
-  private startCacheUpdater() {
-    setInterval(() => this.updateCache(), this.updateInterval);
+  private scheduleNextUpdate() {
+    setTimeout(() => this.checkAndUpdateCache(), this.updateInterval);
+  }
+
+  private async checkAndUpdateCache() {
+    try {
+      const isLocked = await lockfile.check(this.lockFilePath, {
+        stale: this.updateInterval,
+      });
+
+      if (!isLocked) {
+        await this.updateCache();
+      }
+      // Else, lock is held; skip update without logging
+    } catch (error) {
+      console.error("Error checking lockfile:", error);
+    } finally {
+      // Schedule the next update regardless of whether we updated or not
+      this.scheduleNextUpdate();
+    }
   }
 
   private async updateCache() {
     try {
-      // Ensure the lock file exists before attempting to lock
-      if (!fs.existsSync(this.lockFilePath)) {
-        fs.writeFileSync(this.lockFilePath, '');
-      }
-
-      // Acquire a file lock with stale lock duration matching the update interval
+      // Attempt to acquire the lock
       const release = await lockfile.lock(this.lockFilePath, {
         retries: {
-          retries: 10, // Retry 10 times to acquire the lock
-          factor: 2,
-          minTimeout: 100,
-          maxTimeout: 1000,
+          retries: 0, // No retries since we already checked the lock
         },
         stale: this.updateInterval, // Lock expires after the update interval
       });
@@ -126,7 +135,7 @@ export class StoreInfoCacheUpdater {
             });
           } catch (error) {
             console.error(`Failed to update cache for storeId ${storeId}:`, error);
-            // Optionally handle specific errors or continue with the next storeId
+            // Continue with the next storeId
           }
         }
       } finally {
@@ -134,8 +143,12 @@ export class StoreInfoCacheUpdater {
         await this.releaseLock?.();
         this.releaseLock = null;
       }
-    } catch (error) {
-      console.error("Failed to update store cache:", error);
+    } catch (error: any) {
+      if (error.code === 'ELOCKED') {
+        // Another process acquired the lock; skip without logging
+      } else {
+        console.error("Failed to update store cache:", error);
+      }
     }
   }
 
