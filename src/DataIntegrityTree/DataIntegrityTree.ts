@@ -784,6 +784,8 @@ class DataIntegrityTree {
    * @param sha256 - The SHA-256 hash of the file.
    * @param serializedTree - The foreign serialized Merkle tree.
    * @param expectedRootHash - The expected root hash of the Merkle tree.
+   * @param dataDir - The directory where the data is stored.
+   * @param verifiedSha256 - A boolean indicating if the SHA-256 hash has already been verified.
    * @returns A boolean indicating if the SHA-256 is present in the foreign tree and the root hash matches.
    */
   static async validateKeyIntegrityWithForeignTree(
@@ -791,7 +793,8 @@ class DataIntegrityTree {
     sha256: string,
     serializedTree: object,
     expectedRootHash: string,
-    dataDir: string
+    dataDir: string,
+    verifiedSha256: boolean
   ): Promise<boolean> {
     if (!isHexString(hexkey)) {
       throw new Error("key must be a valid hex string");
@@ -802,84 +805,124 @@ class DataIntegrityTree {
     if (!isHexString(expectedRootHash)) {
       throw new Error("expectedRootHash must be a valid hex string");
     }
-
-    // File path based on sha256
+  
+    if (!verifiedSha256) {
+      // Verify the file's SHA-256 hash
+      const isFileValid = await this.verifyFileHash(sha256, dataDir);
+      if (!isFileValid) {
+        return false;
+      }
+    }
+  
+    // Deserialize and verify the tree
+    const tree = this.deserializeAndVerifyTree(serializedTree, expectedRootHash);
+    if (!tree) {
+      return false;
+    }
+  
+    // Check if the combined hash exists in the foreign tree's leaves
+    const isInTree = this.checkHashInTree(tree, hexkey, sha256);
+  
+    return isInTree;
+  }
+  
+  // Function to verify the file's SHA-256 hash
+  private static async verifyFileHash(
+    sha256: string,
+    dataDir: string
+  ): Promise<boolean> {
     const filePath = path.join(dataDir, sha256.match(/.{1,2}/g)!.join("/"));
-
+  
     // Check if the file exists
     if (!fs.existsSync(filePath)) {
       throw new Error(`File at path ${filePath} does not exist`);
     }
-
+  
     const compressedReadStream = fs.createReadStream(filePath);
     const decompressStream = zlib.createGunzip();
     const hash = crypto.createHash("sha256");
-
+  
     // Process file decompression and hash comparison
     return new Promise((resolve, reject) => {
       compressedReadStream.pipe(decompressStream);
-
+  
       decompressStream.on("data", (chunk) => {
         hash.update(chunk);
       });
-
+  
       decompressStream.on("end", () => {
         const uncompressedSha256 = hash.digest("hex");
-
+  
         if (uncompressedSha256 !== sha256) {
           console.warn(
             `File hash mismatch. Expected: ${sha256}, got: ${uncompressedSha256}`
           );
           return resolve(false);
         }
-
-        // Deserialize the foreign tree
-        const leaves = (serializedTree as any).leaves.map((leaf: string) =>
-          Buffer.from(leaf, "hex")
-        );
-        const tree = new MerkleTree(leaves, SHA256, { sortPairs: true });
-
-        // Verify that the deserialized tree's root matches the expected root hash
-        const treeRootHash = tree.getRoot().toString("hex");
-        if (treeRootHash !== expectedRootHash) {
-          console.warn(
-            `Expected root hash ${expectedRootHash}, but got ${treeRootHash}`
-          );
-          return resolve(false);
-        }
-
-        // Rebuild the files map from the serialized tree
-        // @ts-ignore
-        tree.files = new Map(
-          Object.entries((serializedTree as any).files).map(
-            ([key, value]: [string, any]) => [
-              key,
-              { hash: value.hash, sha256: value.sha256 },
-            ]
-          )
-        );
-
-        // Check if the SHA-256 exists in the foreign tree's files
-        const combinedHash = crypto
-          .createHash("sha256")
-          .update(`${hexkey}/${sha256}`)
-          .digest("hex");
-
-        const leaf = Buffer.from(combinedHash, "hex");
-        const isInTree = tree.getLeafIndex(leaf) !== -1;
-
-        resolve(isInTree);
+        resolve(true);
       });
-
+  
       decompressStream.on("error", (err) => {
         reject(err);
       });
-
+  
       compressedReadStream.on("error", (err) => {
         reject(err);
       });
     });
   }
+  
+  // Function to deserialize and verify the tree
+  private static deserializeAndVerifyTree(
+    serializedTree: object,
+    expectedRootHash: string
+  ): MerkleTree | null {
+    // Deserialize the foreign tree
+    const leaves = (serializedTree as any).leaves.map((leaf: string) =>
+      Buffer.from(leaf, "hex")
+    );
+    const tree = new MerkleTree(leaves, SHA256, { sortPairs: true });
+  
+    // Verify that the deserialized tree's root matches the expected root hash
+    const treeRootHash = tree.getRoot().toString("hex");
+    if (treeRootHash !== expectedRootHash) {
+      console.warn(
+        `Expected root hash ${expectedRootHash}, but got ${treeRootHash}`
+      );
+      return null;
+    }
+  
+    // Rebuild the files map from the serialized tree
+    // @ts-ignore
+    tree.files = new Map(
+      Object.entries((serializedTree as any).files).map(
+        ([key, value]: [string, any]) => [
+          key,
+          { hash: value.hash, sha256: value.sha256 },
+        ]
+      )
+    );
+  
+    return tree;
+  }
+  
+  // Function to check if the combined hash exists in the tree
+  private static checkHashInTree(
+    tree: MerkleTree,
+    hexkey: string,
+    sha256: string
+  ): boolean {
+    const combinedHash = crypto
+      .createHash("sha256")
+      .update(`${hexkey}/${sha256}`)
+      .digest("hex");
+  
+    const leaf = Buffer.from(combinedHash, "hex");
+    const isInTree = tree.getLeafIndex(leaf) !== -1;
+  
+    return isInTree;
+  }
+  
 }
 
 export { DataIntegrityTree };
