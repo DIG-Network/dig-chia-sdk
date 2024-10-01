@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.108](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.107...v0.0.1-alpha.108) (2024-10-01)
+
+
+### Features
+
+* add file lock to StoreInfoCacheUpdater ([6b79dec](https://github.com/DIG-Network/dig-chia-sdk/commit/6b79deccdc826dc6b3860d2d43d982c8c87a9594))
+
 ### [0.0.1-alpha.107](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.106...v0.0.1-alpha.107) (2024-10-01)
 
 
