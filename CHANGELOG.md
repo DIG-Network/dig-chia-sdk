@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.106](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.105...v0.0.1-alpha.106) (2024-10-01)
+
+
+### Features
+
+* add the ability to check integrity with verified sha256 ([ce552b5](https://github.com/DIG-Network/dig-chia-sdk/commit/ce552b5ab7f4f9d3595a81ebe3bf50d3d9a68e89))
+
 ### [0.0.1-alpha.105](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.104...v0.0.1-alpha.105) (2024-10-01)
 
 
