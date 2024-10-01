@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.109](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.108...v0.0.1-alpha.109) (2024-10-01)
+
+
+### Bug Fixes
+
+* lockfile setup ([d038935](https://github.com/DIG-Network/dig-chia-sdk/commit/d038935629e53e8047254ef96c3681b7ea79929d))
+
 ### [0.0.1-alpha.108](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.107...v0.0.1-alpha.108) (2024-10-01)
 
 
