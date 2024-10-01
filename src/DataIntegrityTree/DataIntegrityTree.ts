@@ -794,7 +794,7 @@ class DataIntegrityTree {
     serializedTree: object,
     expectedRootHash: string,
     dataDir: string,
-    verifiedSha256: boolean
+    verifiedSha256: boolean = false
   ): Promise<boolean> {
     if (!isHexString(hexkey)) {
       throw new Error("key must be a valid hex string");
