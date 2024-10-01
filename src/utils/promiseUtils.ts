@@ -27,3 +27,23 @@ export async function asyncPool<T, R>(
   
     return ret;
   }
+
+  /**
+ * Helper function to add a timeout to a promise.
+ * @param promise The original promise.
+ * @param ms Timeout in milliseconds.
+ * @param timeoutMessage The error message when the timeout is reached.
+ * @returns Promise that resolves before the timeout or rejects with an error.
+ */
+export const withTimeout = <T>(
+  promise: Promise<T>,
+  ms: number,
+  timeoutMessage: string
+): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(timeoutMessage)), ms)
+    ),
+  ]);
+};
