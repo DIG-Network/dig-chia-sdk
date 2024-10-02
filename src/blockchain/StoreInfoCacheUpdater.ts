@@ -147,7 +147,7 @@ export class StoreInfoCacheUpdater {
       if (error.code === 'ELOCKED') {
         // Another process acquired the lock; skip without logging
       } else {
-        console.error("Failed to update store cache:", error);
+        
       }
     }
   }
