@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.111](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.110...v0.0.1-alpha.111) (2024-10-02)
+
+
+### Features
+
+* add get key chunk ([13f79bc](https://github.com/DIG-Network/dig-chia-sdk/commit/13f79bc09adaee3631f38ae53febfee1ceadeeda))
+
 ### [0.0.1-alpha.110](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.109...v0.0.1-alpha.110) (2024-10-02)
 
 

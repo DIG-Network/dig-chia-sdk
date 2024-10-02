@@ -72,7 +72,7 @@ export const selectUnspentCoins = async (
   const now = Date.now();
   const omitCoinIds = omitCoins.map((coin) => getCoinId(coin).toString("hex"));
 
-  const validReservedCoins = cachedReservedCoins.filter((coinId) => {
+  const validReservedCoins = cachedReservedCoins.map((coinId) => {
     const reservation = cache.get(coinId);
     if (reservation && reservation.expiry > now) {
       // Valid reservation, add to omit list
