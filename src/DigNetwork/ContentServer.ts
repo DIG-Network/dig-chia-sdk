@@ -40,6 +40,16 @@ export class ContentServer {
     return this.fetchWithRetries(url);
   }
 
+   // New method to get only the first chunk of the content
+   public async getKeyChunk(
+    key: string,
+    rootHash: string,
+  ): Promise<Buffer> {
+    // Construct the base URL
+    let url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
+    return this.fetchFirstChunk(url);
+  }
+
   // Method to get the payment address from the peer
   public async getPaymentAddress(): Promise<string | null> {
     console.log(`Fetching payment address from peer ${this.ipAddress}...`);
@@ -371,6 +381,115 @@ export class ContentServer {
           } else {
             reject(new Error("Too many redirects"));
           }
+        } else {
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          reject(
+            new Error(
+              `Failed to retrieve data from ${url}. Status code: ${response.statusCode}`
+            )
+          );
+        }
+      });
+
+      request.on("error", (error: NodeJS.ErrnoException) => {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        console.error(`GET ${url}:`, error.message);
+        reject(error);
+      });
+
+      request.end();
+    });
+  }
+
+  // New core method to fetch only the first chunk without retries
+  private async fetchFirstChunk(url: string): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const urlObj = new URL(url);
+      const timeoutDuration = 5000; // 5 seconds
+
+      let timeout: NodeJS.Timeout | null = null;
+
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || ContentServer.port,
+        path: urlObj.pathname + urlObj.search, // Include query params
+        method: "GET",
+        key: fs.readFileSync(ContentServer.keyPath),
+        cert: fs.readFileSync(ContentServer.certPath),
+        rejectUnauthorized: false,
+      };
+
+      const request = http.request(requestOptions, (response) => {
+        // Set timeout for inactivity
+        timeout = setTimeout(() => {
+          console.error(
+            `Request timeout: No data received for ${
+              timeoutDuration / 1000
+            } seconds.`
+          );
+          request.destroy(); // Use destroy instead of abort
+          reject(
+            new Error(
+              `Request timed out after ${
+                timeoutDuration / 1000
+              } seconds of inactivity`
+            )
+          );
+        }, timeoutDuration);
+
+        const resetTimeout = () => {
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          timeout = setTimeout(() => {
+            console.error(
+              `Request timeout: No data received for ${
+                timeoutDuration / 1000
+              } seconds.`
+            );
+            request.destroy(); // Use destroy instead of abort
+            reject(
+              new Error(
+                `Request timed out after ${
+                  timeoutDuration / 1000
+                } seconds of inactivity`
+              )
+            );
+          }, timeoutDuration);
+        };
+
+        if (response.statusCode === 200) {
+          response.once("data", (chunk) => {
+            if (timeout) {
+              clearTimeout(timeout);
+            }
+            response.destroy(); // Close the connection after receiving the first chunk
+            resolve(chunk);
+          });
+
+          response.on("end", () => {
+            if (timeout) {
+              clearTimeout(timeout);
+            }
+            // In case the response ends before any data is received
+            reject(new Error("No data received"));
+          });
+        } else if (
+          (response.statusCode === 301 || response.statusCode === 302) &&
+          response.headers.location
+        ) {
+          // Handle redirects
+          const redirectUrl = new URL(response.headers.location, url).toString(); // Resolve relative URLs
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          this.fetchFirstChunk(redirectUrl)
+            .then(resolve)
+            .catch(reject);
         } else {
           if (timeout) {
             clearTimeout(timeout);
