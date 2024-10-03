@@ -17,15 +17,15 @@ export class StoreInfoCacheUpdater {
     latestStore: ReturnType<DataStoreSerializer["serialize"]>;
     latestHeight: number;
     latestHash: string;
-  }>;
+  }> = new FileCache(`stores`, USER_DIR_PATH);
   private monitors: Map<string, Promise<void>> = new Map();
   private lockFilePath: string;
   private releaseLock: (() => Promise<void>) | null = null;
   private isMonitoring: boolean = true;
+  private lockRenewalInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
     console.log("Constructor: Initializing StoreInfoCacheUpdater");
-    this.storeCoinCache = new FileCache(`stores`, USER_DIR_PATH);
 
     // Construct lock file path using the path module
     this.lockFilePath = path.join(USER_DIR_PATH, "store-info-cache.lock");
@@ -51,17 +51,22 @@ export class StoreInfoCacheUpdater {
 
   private async startMonitors() {
     try {
-      console.log("Attempting to check if lockfile is held...");
-      // Check if the lockfile is already held
-      const isLocked = await lockfile.check(this.lockFilePath, {
-        realpath: false,
-      });
-      if (isLocked) {
-        // Another process is already running the monitors; skip starting monitors
-        console.log(
-          "Another process is already running the StoreInfoCacheUpdater."
-        );
-        return;
+      console.log("Checking if lockfile exists...");
+      
+      // Check if the lock file exists
+      if (!fs.existsSync(this.lockFilePath)) {
+        console.log("Lockfile does not exist. Proceeding without lock.");
+      } else {
+        // Check if the lockfile is already held
+        const isLocked = await lockfile.check(this.lockFilePath, {
+          realpath: false,
+        });
+        if (isLocked) {
+          console.log(
+            "Another process is already running the StoreInfoCacheUpdater."
+          );
+          return;
+        }
       }
 
       // Attempt to acquire the lock
@@ -70,11 +75,14 @@ export class StoreInfoCacheUpdater {
         retries: {
           retries: 0, // No retries since we only need one lock
         },
-        stale: 60000, // Lock expires after 1 minute (adjust as needed)
+        stale: 60000, // Lock expires after 1 minute
         realpath: false, // Ensure lockfile uses the exact path
       });
 
       console.log("Lock acquired, starting monitors...");
+      
+      // Renew the lock every minute by reacquiring it
+      this.renewLock();
 
       const storeIds = this.storeCoinCache.getCachedKeys();
       console.log(`Found ${storeIds.length} store IDs in cache:`, storeIds);
@@ -110,7 +118,37 @@ export class StoreInfoCacheUpdater {
           console.error("Error releasing the lock:", releaseError);
         }
       }
+      // Clear the lock renewal interval
+      if (this.lockRenewalInterval) {
+        clearInterval(this.lockRenewalInterval);
+        this.lockRenewalInterval = null;
+      }
     }
+  }
+
+  private renewLock() {
+    // Set up a renewal process that releases and reacquires the lock every minute
+    this.lockRenewalInterval = setInterval(async () => {
+      try {
+        if (this.releaseLock) {
+          console.log("Releasing the lock for renewal...");
+          await this.releaseLock();
+          console.log("Lock released for renewal.");
+        }
+
+        // Reacquire the lock
+        this.releaseLock = await lockfile.lock(this.lockFilePath, {
+          retries: {
+            retries: 0, // No retries since we only need one lock
+          },
+          stale: 60000, // Lock expires after 1 minute
+          realpath: false, // Ensure lockfile uses the exact path
+        });
+        console.log("Lock reacquired for renewal.");
+      } catch (error) {
+        console.error("Error renewing the lock:", error);
+      }
+    }, 60000); // Renew the lock every 60 seconds
   }
 
   // Monitor a single store's coin
@@ -235,7 +273,6 @@ export class StoreInfoCacheUpdater {
   }
 
   private isUnrecoverableError(error: any): boolean {
-    // Determine whether the error is unrecoverable
     return true;
   }
 }
