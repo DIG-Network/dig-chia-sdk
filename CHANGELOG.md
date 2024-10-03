@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.113](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.112...v0.0.1-alpha.113) (2024-10-03)
+
+
+### Bug Fixes
+
+* double spend error ([c6201a7](https://github.com/DIG-Network/dig-chia-sdk/commit/c6201a74a6a73850900dbce5870568d48b729473))
+
 ### [0.0.1-alpha.112](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.111...v0.0.1-alpha.112) (2024-10-03)
 
 
