@@ -129,12 +129,16 @@ export class StoreInfoCacheUpdater {
         // Get the coinId associated with the store
         const coinId = getCoinId(latestStore.coin);
 
+        console.log(`Waiting for coin to be spent: ${coinId.toString("hex")}`);
+
         // Wait for the coin to be spent
         await peer.waitForCoinToBeSpent(
           coinId,
           latestHeight,
           Buffer.from(latestHash, "hex")
         );
+
+        console.log(`Detected Coin Spend: ${coinId.toString("hex")}`);
 
         let updatedStore, newHeight;
 
