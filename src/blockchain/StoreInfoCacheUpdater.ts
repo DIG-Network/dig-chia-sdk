@@ -29,9 +29,9 @@ export class StoreInfoCacheUpdater {
     // Construct lock file path using the path module
     this.lockFilePath = path.join(DIG_FOLDER_PATH, "store-info-cache.lock");
 
-    if (fs.existsSync(this.lockFilePath)) {
-      console.log("Removing existing lock file");
-      fs.unlinkSync(this.lockFilePath);
+    const lockDir = path.dirname(this.lockFilePath);
+    if (!fs.existsSync(lockDir)) {
+      fs.mkdirSync(lockDir, { recursive: true });
     }
 
     // Start monitors for existing storeIds
