@@ -10,6 +10,7 @@ import {
   Peer,
   getMainnetGenesisChallenge,
 } from "@dignetwork/datalayer-driver";
+import { get } from "lodash";
 
 export class StoreInfoCacheUpdater {
   private static instance: StoreInfoCacheUpdater;
@@ -52,7 +53,7 @@ export class StoreInfoCacheUpdater {
   private async startMonitors() {
     try {
       console.log("Checking if lockfile exists...");
-      
+
       // Check if the lock file exists
       if (!fs.existsSync(this.lockFilePath)) {
         console.log("Lockfile does not exist. Proceeding without lock.");
@@ -80,7 +81,7 @@ export class StoreInfoCacheUpdater {
       });
 
       console.log("Lock acquired, starting monitors...");
-      
+
       // Renew the lock every minute by reacquiring it
       this.renewLock();
 
@@ -190,12 +191,29 @@ export class StoreInfoCacheUpdater {
 
         console.log(`Waiting for coin to be spent: ${coinId.toString("hex")}`);
 
-        // Wait for the coin to be spent
-        await peer.waitForCoinToBeSpent(
-          coinId,
-          latestHeight,
-          Buffer.from(latestHash, "hex")
-        );
+        try {
+          // Wait for the coin to be spent
+          await peer.waitForCoinToBeSpent(
+            coinId,
+            latestHeight,
+            Buffer.from(latestHash, "hex")
+          );
+        } catch {
+          const genesisChallenge = await getMainnetGenesisChallenge();
+          const storeInfo = await withTimeout(
+            peer.syncStore(latestStore, null, genesisChallenge, false),
+            60000,
+            `Timeout syncing store for storeId ${storeId}`
+          );
+
+          const headerHash = await peer.getHeaderHash(storeInfo.latestHeight);
+
+          await peer.waitForCoinToBeSpent(
+            getCoinId(storeInfo.latestStore.coin),
+            storeInfo.latestHeight,
+            headerHash
+          );
+        }
 
         console.log(`Detected Coin Spend: ${coinId.toString("hex")}`);
 
