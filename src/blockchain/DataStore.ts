@@ -40,6 +40,7 @@ import NodeCache from "node-cache";
 import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
 import { StoreInfoCacheUpdater } from "./StoreInfoCacheUpdater";
 import { Environment } from "../utils";
+import { get } from "lodash";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
 const rootHistoryCache = new NodeCache({ stdTTL: 180 });
@@ -50,6 +51,7 @@ const readdir = promisify(fs.readdir);
 export class DataStore {
   private storeId: string;
   private tree: DataIntegrityTree;
+  private static activeMonitors: Map<string, boolean> = new Map();
 
   constructor(storeId: string, options?: DataIntegrityTreeOptions) {
     this.storeId = storeId;
@@ -66,6 +68,10 @@ export class DataStore {
     }
 
     this.tree = new DataIntegrityTree(storeId, _options);
+
+    if (!Environment.CLI_MODE) {
+      DataStore.monitorStoreIndefinitely(this.storeId);
+    }
   }
 
   public get StoreId(): string {
@@ -306,6 +312,131 @@ export class DataStore {
     );
 
     return storIds.map((storeId) => DataStore.from(storeId));
+  }
+
+   /**
+   * Monitors the store indefinitely by syncing it with a peer.
+   * Logs store retrieval and caching operations. If an error occurs, logs the error and restarts the process after a short delay.
+   * Only one monitor can be active per storeId.
+   * @param {string} storeId - The store identifier to monitor.
+   * @returns {Promise<void>} Never resolves; runs indefinitely.
+   */
+   public static async monitorStoreIndefinitely(storeId: string): Promise<void> {
+    // Check if a monitor is already running for this storeId
+    if (this.activeMonitors.get(storeId)) {
+      console.log(`Monitor already running for storeId: ${storeId}`);
+      return;
+    }
+
+    // Set the monitor as active
+    this.activeMonitors.set(storeId, true);
+
+    const storeCoinCache = new FileCache<{
+      latestStore: ReturnType<DataStoreSerializer["serialize"]>;
+      latestHeight: number;
+      latestHash: string;
+    }>(`stores`);
+
+    // Clear the cache at the start
+    console.log(`Clearing cache for storeId: ${storeId}`);
+    storeCoinCache.delete(storeId);
+
+    while (true) {
+      try {
+        console.log(`Connecting to peer for storeId: ${storeId}`);
+        const peer = await FullNodePeer.connect();
+        const cachedInfo = storeCoinCache.get(storeId);
+
+        if (cachedInfo) {
+          // Log cached store info retrieval
+          console.log(
+            `Cached store info found for storeId: ${storeId}, syncing...`
+          );
+
+          // Deserialize cached info and wait for the coin to be spent
+          const previousStore = DataStoreSerializer.deserialize({
+            latestStore: cachedInfo.latestStore,
+            latestHeight: cachedInfo.latestHeight.toString(),
+            latestHash: cachedInfo.latestHash,
+          });
+
+          console.log(
+            `Waiting for coin to be spent for storeId: ${storeId}...`
+          );
+          await peer.waitForCoinToBeSpent(
+            getCoinId(previousStore.latestStore.coin),
+            previousStore.latestHeight,
+            previousStore.latestHash
+          );
+
+          // Sync store and get updated details
+          console.log(`Syncing store for storeId: ${storeId}`);
+          const { latestStore, latestHeight } = await peer.syncStore(
+            previousStore.latestStore,
+            previousStore.latestHeight,
+            previousStore.latestHash,
+            false
+          );
+          const latestHash = await peer.getHeaderHash(latestHeight);
+
+          // Serialize and cache the updated store info
+          const serializedLatestStore = new DataStoreSerializer(
+            latestStore,
+            latestHeight,
+            latestHash
+          ).serialize();
+
+          console.log(`Caching updated store info for storeId: ${storeId}`);
+          storeCoinCache.set(storeId, {
+            latestStore: serializedLatestStore,
+            latestHeight,
+            latestHash: latestHash.toString("hex"),
+          });
+
+          continue; // Continue monitoring
+        }
+
+        // If no cached info exists, log and sync from the creation height
+        console.log(
+          `No cached info found for storeId: ${storeId}. Retrieving creation height.`
+        );
+
+        const dataStore = DataStore.from(storeId);
+        const { createdAtHeight, createdAtHash } = await dataStore.getCreationHeight();
+
+        // Sync store from the peer using launcher ID
+        console.log(`Syncing store from launcher ID for storeId: ${storeId}`);
+        const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
+          Buffer.from(storeId, "hex"),
+          createdAtHeight,
+          createdAtHash,
+          false
+        );
+
+        const latestHash = await peer.getHeaderHash(latestHeight);
+
+        // Serialize and cache the new store info
+        const serializedLatestStore = new DataStoreSerializer(
+          latestStore,
+          latestHeight,
+          latestHash
+        ).serialize();
+
+        console.log(`Caching new store info for storeId: ${storeId}`);
+        storeCoinCache.set(storeId, {
+          latestStore: serializedLatestStore,
+          latestHeight,
+          latestHash: latestHash.toString("hex"),
+        });
+      } catch (error: any) {
+        console.error(
+          `Error in monitorStoreIndefinitely for storeId: ${storeId} - ${error.message}`
+        );
+
+        // Delay before restarting to avoid rapid retries
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
   }
 
   public async fetchCoinInfo(): Promise<{
