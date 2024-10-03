@@ -1,3 +1,4 @@
+import fs from "fs";
 import { FullNodePeer } from "./FullNodePeer";
 import { FileCache, USER_DIR_PATH, DIG_FOLDER_PATH } from "../utils";
 import { DataStoreSerializer } from "./DataStoreSerializer";
@@ -27,6 +28,11 @@ export class StoreInfoCacheUpdater {
 
     // Construct lock file path using the path module
     this.lockFilePath = path.join(DIG_FOLDER_PATH, "store-info-cache.lock");
+
+    if (fs.existsSync(this.lockFilePath)) {
+      console.log("Removing existing lock file");
+      fs.unlinkSync(this.lockFilePath);
+    }
 
     // Start monitors for existing storeIds
     this.startMonitors();
