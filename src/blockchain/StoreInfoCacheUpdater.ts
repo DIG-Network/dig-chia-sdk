@@ -80,6 +80,8 @@ export class StoreInfoCacheUpdater {
         }
       }
 
+      this.isMonitoring = true;
+
       // Wait for all monitors to settle
       const monitorPromises = Array.from(this.monitors.values());
 
@@ -104,6 +106,7 @@ export class StoreInfoCacheUpdater {
     while (this.isMonitoring) {
       let peer: Peer | null = null;
       try {
+        console.log(`Monitoring store ${storeId}`);
         // Connect to a peer
         peer = await withTimeout(
           FullNodePeer.connect(),
@@ -135,7 +138,7 @@ export class StoreInfoCacheUpdater {
         // Get the coinId associated with the store
         const coinId = getCoinId(latestStore.coin);
 
-        console.log(`Waiting for coin to be spent: ${coinId.toString("hex")}`);
+        console.log(`!!! Waiting for coin to be spent: ${coinId.toString("hex")}`);
 
         // Wait for the coin to be spent
         await peer.waitForCoinToBeSpent(
