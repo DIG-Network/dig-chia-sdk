@@ -5,8 +5,8 @@ import { DIG_FOLDER_PATH } from "./config";
 export class FileCache<T> {
   private cacheDir: string;
 
-  constructor(relativeFilePath: string) {
-    this.cacheDir = path.join(DIG_FOLDER_PATH, relativeFilePath);
+  constructor(relativeFilePath: string, baseDir: string = DIG_FOLDER_PATH) {
+    this.cacheDir = path.join(baseDir, relativeFilePath);
     this.ensureDirectoryExists();
   }
 

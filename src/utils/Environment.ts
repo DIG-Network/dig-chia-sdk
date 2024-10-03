@@ -2,6 +2,8 @@ import fs from "fs";
 import path from "path";
 
 export class Environment {
+  private static cliMode: boolean = false;
+
   // Helper to validate if a string is a valid IP address (IPv4)
   private static isValidIp(ip: string): boolean {
     const ipPattern =
@@ -91,5 +93,13 @@ export class Environment {
   static get REMOTE_NODE(): boolean | undefined {
     const value = process.env["REMOTE_NODE"];
     return value === "1" ? true : value === "0" ? false : undefined;
+  }
+
+  static set CLI_MODE(mode: boolean) {
+    this.cliMode = mode;
+  }
+
+  static get CLI_MODE(): boolean | undefined {
+    return Environment.cliMode;
   }
 }

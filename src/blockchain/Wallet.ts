@@ -227,7 +227,8 @@ export class Wallet {
     omitCoins: Coin[] = []
   ): Promise<Coin[]> {
     const cache = new FileCache<{ coinId: string; expiry: number }>(
-      path.join(USER_DIR_PATH, "reserved_coins")
+      "reserved_coins",
+      USER_DIR_PATH
     );
 
     const ownerPuzzleHash = await this.getOwnerPuzzleHash();
@@ -264,6 +265,7 @@ export class Wallet {
       );
 
       const selectedCoins = selectCoins(unspentCoins, feeBigInt + coinAmount);
+
       return selectedCoins;
     };
 

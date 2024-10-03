@@ -9,7 +9,6 @@ import {
   Coin,
 } from "@dignetwork/datalayer-driver";
 import { FullNodePeer } from "./FullNodePeer";
-import { selectUnspentCoins } from "./coins";
 import { Wallet } from "./Wallet";
 import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
@@ -39,7 +38,7 @@ export class ServerCoin {
       const peer = await FullNodePeer.connect();
       const wallet = await Wallet.load("default");
       const publicSyntheticKey = await wallet.getPublicSyntheticKey();
-      const serverCoinCreationCoins = await selectUnspentCoins(
+      const serverCoinCreationCoins = await wallet.selectUnspentCoins(
         peer,
         BigInt(serverCoinCollateral),
         BigInt(1000000)
@@ -135,7 +134,7 @@ export class ServerCoin {
       );
     }
 
-    const feeCoins = await selectUnspentCoins(peer, BigInt(0), BigInt(1000000));
+    const feeCoins = await wallet.selectUnspentCoins(peer, BigInt(0), BigInt(1000000));
 
     const coin = {
       amount: BigInt(serverCoin.coin.amount),

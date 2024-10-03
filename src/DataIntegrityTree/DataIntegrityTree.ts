@@ -60,7 +60,7 @@ class DataIntegrityTree {
   private storeBaseDir: string;
   private storeDir: string;
   private dataDir: string;
-  public files: Map<string, { hash: string; sha256: string }>;
+  public files: Map<string, { hash: string; sha256: string; bytes: string }>;
   private tree: MerkleTree;
 
   constructor(storeId: string, options: DataIntegrityTreeOptions = {}) {
@@ -208,11 +208,18 @@ class DataIntegrityTree {
     }
     const tempFilePath = path.join(tempDir, `${crypto.randomUUID()}.gz`);
 
+    let totalBytes = 0;
+
     return new Promise((resolve, reject) => {
       const tempWriteStream = fs.createWriteStream(tempFilePath);
 
       readStream.on("data", (chunk) => {
         uncompressedHash.update(chunk);
+      });
+
+      // Now listen to the gzip stream for compressed data size
+      gzip.on("data", (chunk) => {
+        totalBytes += chunk.length; // This counts compressed bytes
       });
 
       readStream.pipe(gzip).pipe(tempWriteStream);
@@ -255,6 +262,7 @@ class DataIntegrityTree {
           this.files.set(key, {
             hash: combinedHash,
             sha256: sha256,
+            bytes: totalBytes.toString(),
           });
           await new Promise((resolve) => setTimeout(resolve, 100));
           this._rebuildTree();

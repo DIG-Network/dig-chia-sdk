@@ -1,10 +1,14 @@
 import { FullNodePeer } from "./FullNodePeer";
-import { FileCache } from "../utils";
+import { FileCache, USER_DIR_PATH, DIG_FOLDER_PATH } from "../utils";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import { withTimeout } from "../utils";
-import * as lockfile from 'proper-lockfile';
-import * as path from 'path';
-import { DIG_FOLDER_PATH } from "../utils";
+import * as lockfile from "proper-lockfile";
+import * as path from "path";
+import {
+  getCoinId,
+  Peer,
+  getMainnetGenesisChallenge,
+} from "@dignetwork/datalayer-driver";
 
 export class StoreInfoCacheUpdater {
   private static instance: StoreInfoCacheUpdater;
@@ -13,165 +17,203 @@ export class StoreInfoCacheUpdater {
     latestHeight: number;
     latestHash: string;
   }>;
-  private updateInterval: number;
-  private lockFilePath: string; // Lock file path in DIG_FOLDER_PATH
-  private releaseLock: (() => Promise<void>) | null = null; // Holds the release function for cleanup
+  private monitors: Map<string, Promise<void>> = new Map();
+  private lockFilePath: string;
+  private releaseLock: (() => Promise<void>) | null = null;
+  private isMonitoring: boolean = true;
 
-  private constructor(updateIntervalInMinutes: number = 5) {
-    this.storeCoinCache = new FileCache(`stores`);
-    this.updateInterval = updateIntervalInMinutes * 60 * 1000; // Convert minutes to milliseconds
+  private constructor() {
+    this.storeCoinCache = new FileCache(`stores`, USER_DIR_PATH);
 
     // Construct lock file path using the path module
-    this.lockFilePath = path.join(DIG_FOLDER_PATH, 'store-info-cache.lock');
+    this.lockFilePath = path.join(DIG_FOLDER_PATH, "store-info-cache.lock");
 
-    // Start the cache updater using setTimeout
-    this.scheduleNextUpdate();
-
-    // Set up process exit handlers for cleanup
-    this.setupExitHandlers();
+    // Start monitors for existing storeIds
+    this.startMonitors();
   }
 
   public static initInstance(): StoreInfoCacheUpdater {
     if (!StoreInfoCacheUpdater.instance) {
+      console.log("Initializing DataStore Monitor");
       StoreInfoCacheUpdater.instance = new StoreInfoCacheUpdater();
     }
     return StoreInfoCacheUpdater.instance;
   }
 
-  private scheduleNextUpdate() {
-    setTimeout(() => this.checkAndUpdateCache(), this.updateInterval);
-  }
-
-  private async checkAndUpdateCache() {
+  private async startMonitors() {
     try {
+      // Check if the lockfile is already held
       const isLocked = await lockfile.check(this.lockFilePath, {
-        stale: this.updateInterval,
+        realpath: false,
       });
-
-      if (!isLocked) {
-        await this.updateCache();
+      if (isLocked) {
+        // Another process is already running the monitors; skip starting monitors
+        console.log(
+          "Another process is already running the StoreInfoCacheUpdater."
+        );
+        return;
       }
-      // Else, lock is held; skip update without logging
-    } catch (error) {
-      console.error("Error checking lockfile:", error);
-    } finally {
-      // Schedule the next update regardless of whether we updated or not
-      this.scheduleNextUpdate();
-    }
-  }
 
-  private async updateCache() {
-    try {
       // Attempt to acquire the lock
-      const release = await lockfile.lock(this.lockFilePath, {
+      this.releaseLock = await lockfile.lock(this.lockFilePath, {
         retries: {
-          retries: 0, // No retries since we already checked the lock
+          retries: 0, // No retries since we only need one lock
         },
-        stale: this.updateInterval, // Lock expires after the update interval
+        stale: 60000, // Lock expires after 1 minute (adjust as needed)
+        realpath: false, // Ensure lockfile uses the exact path
       });
 
-      // Store the release function for cleanup during process exit
-      this.releaseLock = release;
+      const storeIds = this.storeCoinCache.getCachedKeys();
 
-      try {
-        const storeIds = this.storeCoinCache.getCachedKeys();
-
-        for (const storeId of storeIds) {
-          try {
-            const cachedInfo = this.storeCoinCache.get(storeId);
-
-            if (!cachedInfo) {
-              continue;
-            }
-
-            // Deserialize the cached store info
-            const { latestStore: serializedStore, latestHeight, latestHash } =
-              cachedInfo;
-
-            const { latestStore: previousInfo } = DataStoreSerializer.deserialize({
-              latestStore: serializedStore,
-              latestHeight: latestHeight.toString(),
-              latestHash: latestHash,
-            });
-
-            // Wrap the connection with a timeout
-            const peer = await withTimeout(
-              FullNodePeer.connect(),
-              60000,
-              "Timeout connecting to FullNodePeer"
-            );
-
-            // Wrap the syncStore call with a timeout
-            const { latestStore, latestHeight: newHeight } = await withTimeout(
-              peer.syncStore(
-                previousInfo,
-                latestHeight,
-                Buffer.from(latestHash, "hex"),
-                false
-              ),
-              60000,
-              `Timeout syncing store for storeId ${storeId}`
-            );
-
-            // Wrap the getHeaderHash call with a timeout
-            const latestHashBuffer = await withTimeout(
-              peer.getHeaderHash(newHeight),
-              60000,
-              `Timeout getting header hash for height ${newHeight}`
-            );
-
-            // Serialize the updated store data for caching
-            const serializedLatestStore = new DataStoreSerializer(
-              latestStore,
-              newHeight,
-              latestHashBuffer
-            ).serialize();
-
-            // Recache the updated store info
-            this.storeCoinCache.set(storeId, {
-              latestStore: serializedLatestStore,
-              latestHeight: newHeight,
-              latestHash: latestHashBuffer.toString("hex"),
-            });
-          } catch (error) {
-            console.error(`Failed to update cache for storeId ${storeId}:`, error);
-            // Continue with the next storeId
-          }
+      for (const storeId of storeIds) {
+        // Check if a monitor is already running for this storeId
+        if (!this.monitors.has(storeId)) {
+          // Start monitoring in the background
+          const monitorPromise = this.monitorStore(storeId);
+          this.monitors.set(storeId, monitorPromise);
         }
-      } finally {
-        // Always release the lock after finishing the update
-        await this.releaseLock?.();
-        this.releaseLock = null;
       }
-    } catch (error: any) {
-      if (error.code === 'ELOCKED') {
-        // Another process acquired the lock; skip without logging
-      } else {
-        
-      }
-    }
-  }
 
-  private setupExitHandlers() {
-    const cleanup = async () => {
+      // Wait for all monitors to settle
+      const monitorPromises = Array.from(this.monitors.values());
+
+      await Promise.all(monitorPromises);
+    } catch (error: any) {
+      console.error("Monitor system encountered an error:", error);
+    } finally {
+      // Release the lock
       if (this.releaseLock) {
         try {
           await this.releaseLock();
-          console.log("Lock released successfully on process exit.");
-        } catch (error) {
-          console.error("Failed to release lock on exit:", error);
+          console.log("Lock released successfully.");
+        } catch (releaseError) {
+          console.error("Error releasing the lock:", releaseError);
         }
       }
-    };
+    }
+  }
 
-    // Listen for process exit events and call cleanup
-    process.on('SIGINT', cleanup);  // Catch CTRL+C
-    process.on('SIGTERM', cleanup); // Catch termination signals
-    process.on('exit', cleanup);    // On normal exit
-    process.on('uncaughtException', async (error) => {
-      console.error("Uncaught exception, cleaning up:", error);
-      await cleanup();
-      process.exit(1); // Ensure process exits after handling exception
-    });
+  // Monitor a single store's coin
+  private async monitorStore(storeId: string): Promise<void> {
+    while (this.isMonitoring) {
+      let peer: Peer | null = null;
+      try {
+        // Connect to a peer
+        peer = await withTimeout(
+          FullNodePeer.connect(),
+          60000,
+          "Timeout connecting to FullNodePeer"
+        );
+
+        // Get the latest store info (from cache if available)
+        const cachedInfo = this.storeCoinCache.get(storeId);
+        if (!cachedInfo) {
+          // If no cached info, skip and wait before retrying
+          console.error(`No cached info for storeId ${storeId}`);
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          continue;
+        }
+
+        const {
+          latestStore: serializedStore,
+          latestHeight,
+          latestHash,
+        } = cachedInfo;
+
+        const { latestStore } = DataStoreSerializer.deserialize({
+          latestStore: serializedStore,
+          latestHeight: latestHeight.toString(),
+          latestHash: latestHash,
+        });
+
+        // Get the coinId associated with the store
+        const coinId = getCoinId(latestStore.coin);
+
+        // Wait for the coin to be spent
+        await peer.waitForCoinToBeSpent(
+          coinId,
+          latestHeight,
+          Buffer.from(latestHash, "hex")
+        );
+
+        let updatedStore, newHeight;
+
+        try {
+          // When resolved, sync the store
+          //const { latestStore: updatedStore, latestHeight: newHeight } = await withTimeout(
+          const storeInfo = await withTimeout(
+            peer.syncStore(
+              latestStore,
+              latestHeight,
+              Buffer.from(latestHash, "hex"),
+              false // withHistory
+            ),
+            60000,
+            `Timeout syncing store for storeId ${storeId}`
+          );
+
+          updatedStore = storeInfo.latestStore;
+          newHeight = storeInfo.latestHeight;
+        } catch {
+          const genesisChallenge = await getMainnetGenesisChallenge();
+          const storeInfo = await withTimeout(
+            peer.syncStore(latestStore, null, genesisChallenge, false),
+            60000,
+            `Timeout syncing store for storeId ${storeId}`
+          );
+
+          updatedStore = storeInfo.latestStore;
+          newHeight = storeInfo.latestHeight;
+        }
+
+        // Get the latest header hash
+        const latestHashBuffer = await withTimeout(
+          peer.getHeaderHash(newHeight),
+          60000,
+          `Timeout getting header hash for height ${newHeight}`
+        );
+
+        // Serialize the updated store data for caching
+        const serializedLatestStore = new DataStoreSerializer(
+          updatedStore,
+          newHeight,
+          latestHashBuffer
+        ).serialize();
+
+        // Update the cache
+        this.storeCoinCache.set(storeId, {
+          latestStore: serializedLatestStore,
+          latestHeight: newHeight,
+          latestHash: latestHashBuffer.toString("hex"),
+        });
+
+        peer = null;
+
+        // Continue monitoring
+      } catch (error) {
+        console.error(`Error monitoring store ${storeId}:`, error);
+
+        // Close the peer connection if it's open
+        if (peer) {
+          peer = null;
+        }
+
+        // Determine if the error is unrecoverable
+        if (this.isUnrecoverableError(error)) {
+          this.isMonitoring = false; // Signal other monitors to stop
+          throw error; // Propagate error up to stop monitoring
+        }
+
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    }
+  }
+
+  private isUnrecoverableError(error: any): boolean {
+    // Determine whether the error is unrecoverable
+    // For this example, we'll treat any unexpected error as unrecoverable
+    // You can customize this logic based on your application's needs
+    return true;
   }
 }
