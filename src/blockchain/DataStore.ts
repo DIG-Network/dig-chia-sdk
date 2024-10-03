@@ -22,8 +22,9 @@ import {
   MIN_HEIGHT_HEADER_HASH,
   getActiveStoreId,
   STORE_PATH,
+  USER_DIR_PATH,
 } from "../utils/config";
-import { selectUnspentCoins, calculateFeeForCoinSpends } from "./coins";
+import { calculateFeeForCoinSpends } from "./coins";
 import { RootHistoryItem, DatFile } from "../types";
 import { green, red } from "colorette";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
@@ -38,6 +39,7 @@ import { DataStoreSerializer } from "./DataStoreSerializer";
 import NodeCache from "node-cache";
 import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
 import { StoreInfoCacheUpdater } from "./StoreInfoCacheUpdater";
+import { Environment } from "../utils";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
 const rootHistoryCache = new NodeCache({ stdTTL: 180 });
@@ -173,7 +175,7 @@ export class DataStore {
       const publicSyntheticKey = await wallet.getPublicSyntheticKey();
       const ownerSyntheicPuzzleHash =
         syntheticKeyToPuzzleHash(publicSyntheticKey);
-      const storeCreationCoins = await selectUnspentCoins(
+      const storeCreationCoins = await wallet.selectUnspentCoins(
         peer,
         BigInt(1),
         BigInt(0)
@@ -312,39 +314,42 @@ export class DataStore {
     latestHash: Buffer;
   }> {
     try {
-      // Kick off the updater instance in the backgounf if not already running
-      StoreInfoCacheUpdater.initInstance();
-
       // Initialize the cache for the current storeId's coin info
       const storeCoinCache = new FileCache<{
         latestStore: ReturnType<DataStoreSerializer["serialize"]>;
         latestHeight: number;
         latestHash: string;
-      }>(`stores`);
-  
-      // Try to get cached store info
-      const cachedInfo = storeCoinCache.get(this.storeId);
-  
-      if (cachedInfo) {
-        // If we have cached info, return it directly
-        const { latestStore, latestHeight } =
-          DataStoreSerializer.deserialize({
-            latestStore: cachedInfo.latestStore,
-            latestHeight: cachedInfo.latestHeight.toString(),
-            latestHash: cachedInfo.latestHash,
-          });
-  
-        return {
-          latestStore,
-          latestHeight: cachedInfo.latestHeight,
-          latestHash: Buffer.from(cachedInfo.latestHash, "hex"),
-        };
+      }>(`stores`, USER_DIR_PATH);
+
+      if (!Environment.CLI_MODE) {
+        // Kick off the updater instance in the backgounf if not already running
+        StoreInfoCacheUpdater.initInstance();
+
+        // Try to get cached store info
+        const cachedInfo = storeCoinCache.get(this.storeId);
+
+        if (cachedInfo) {
+          // If we have cached info, return it directly
+          const { latestStore } = DataStoreSerializer.deserialize(
+            {
+              latestStore: cachedInfo.latestStore,
+              latestHeight: cachedInfo.latestHeight.toString(),
+              latestHash: cachedInfo.latestHash,
+            }
+          );
+
+          return {
+            latestStore,
+            latestHeight: cachedInfo.latestHeight,
+            latestHash: Buffer.from(cachedInfo.latestHash, "hex"),
+          };
+        }
       }
-  
+
       // If no cached info, proceed to fetch and cache it
       // Use getCreationHeight to retrieve height and hash information
       const { createdAtHeight, createdAtHash } = await this.getCreationHeight();
-  
+
       // Sync store from peer
       const peer = await FullNodePeer.connect();
       const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
@@ -353,29 +358,29 @@ export class DataStore {
         createdAtHash,
         false
       );
-  
+
       const latestHash = await peer.getHeaderHash(latestHeight);
-  
+
       // Serialize the latest store info for caching
       const serializedLatestStore = new DataStoreSerializer(
         latestStore,
         latestHeight,
         latestHash
       ).serialize();
-  
+
       // Cache the latest store info
       storeCoinCache.set(this.storeId, {
         latestStore: serializedLatestStore,
         latestHeight,
         latestHash: latestHash.toString("hex"),
       });
-  
+
       return { latestStore, latestHeight, latestHash };
     } catch (error) {
       console.trace("Failed to fetch coin info", error);
       throw error;
     }
-  }  
+  }
 
   public async cacheStoreCreationHeight(): Promise<{
     createdAtHeight: number;
@@ -536,6 +541,7 @@ export class DataStore {
     const publicSyntheticKey = await wallet.getPublicSyntheticKey();
 
     const { latestStore } = await this.fetchCoinInfo();
+
     const updateStoreResponse = updateStoreMetadata(
       latestStore,
       metadata.rootHash,
@@ -548,7 +554,7 @@ export class DataStore {
     );
 
     const fee = await calculateFeeForCoinSpends(peer, null);
-    const unspentCoins = await selectUnspentCoins(peer, BigInt(0), fee);
+    const unspentCoins = await wallet.selectUnspentCoins(peer, BigInt(0), fee);
     const feeCoinSpends = await addFee(
       publicSyntheticKey,
       unspentCoins,

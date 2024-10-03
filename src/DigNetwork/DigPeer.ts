@@ -17,7 +17,6 @@ import {
 } from "@dignetwork/datalayer-driver";
 import { FullNodePeer } from "../blockchain";
 import { Wallet } from "../blockchain";
-import { selectUnspentCoins } from "../blockchain/coins";
 
 export class DigPeer {
   private ipAddress: string;
@@ -94,12 +93,11 @@ export class DigPeer {
       (acc, output) => acc + output.amount,
       BigInt(0)
     );
-    const coins = await selectUnspentCoins(
+    const coins = await wallet.selectUnspentCoins(
       peer,
       totalAmount,
       totalFee,
-      [],
-      walletName
+      []
     );
 
     const coinSpends = await sendXch(
