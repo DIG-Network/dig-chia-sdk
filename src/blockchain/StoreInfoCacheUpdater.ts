@@ -24,13 +24,16 @@ export class StoreInfoCacheUpdater {
   private isMonitoring: boolean = true;
 
   private constructor() {
+    console.log("Constructor: Initializing StoreInfoCacheUpdater");
     this.storeCoinCache = new FileCache(`stores`, USER_DIR_PATH);
 
     // Construct lock file path using the path module
     this.lockFilePath = path.join(USER_DIR_PATH, "store-info-cache.lock");
+    console.log("Lock file path:", this.lockFilePath);
 
     const lockDir = path.dirname(this.lockFilePath);
     if (!fs.existsSync(lockDir)) {
+      console.log(`Creating lock directory: ${lockDir}`);
       fs.mkdirSync(lockDir, { recursive: true });
     }
 
@@ -48,6 +51,7 @@ export class StoreInfoCacheUpdater {
 
   private async startMonitors() {
     try {
+      console.log("Attempting to check if lockfile is held...");
       // Check if the lockfile is already held
       const isLocked = await lockfile.check(this.lockFilePath, {
         realpath: false,
@@ -61,6 +65,7 @@ export class StoreInfoCacheUpdater {
       }
 
       // Attempt to acquire the lock
+      console.log("Attempting to acquire lock...");
       this.releaseLock = await lockfile.lock(this.lockFilePath, {
         retries: {
           retries: 0, // No retries since we only need one lock
@@ -69,14 +74,20 @@ export class StoreInfoCacheUpdater {
         realpath: false, // Ensure lockfile uses the exact path
       });
 
+      console.log("Lock acquired, starting monitors...");
+
       const storeIds = this.storeCoinCache.getCachedKeys();
+      console.log(`Found ${storeIds.length} store IDs in cache:`, storeIds);
 
       for (const storeId of storeIds) {
         // Check if a monitor is already running for this storeId
         if (!this.monitors.has(storeId)) {
+          console.log(`Starting monitor for storeId: ${storeId}`);
           // Start monitoring in the background
           const monitorPromise = this.monitorStore(storeId);
           this.monitors.set(storeId, monitorPromise);
+        } else {
+          console.log(`Monitor already exists for storeId: ${storeId}`);
         }
       }
 
@@ -84,7 +95,7 @@ export class StoreInfoCacheUpdater {
 
       // Wait for all monitors to settle
       const monitorPromises = Array.from(this.monitors.values());
-
+      console.log("Waiting for all monitor promises to settle...");
       await Promise.all(monitorPromises);
     } catch (error: any) {
       console.error("Monitor system encountered an error:", error);
@@ -92,6 +103,7 @@ export class StoreInfoCacheUpdater {
       // Release the lock
       if (this.releaseLock) {
         try {
+          console.log("Releasing lock...");
           await this.releaseLock();
           console.log("Lock released successfully.");
         } catch (releaseError) {
@@ -138,7 +150,7 @@ export class StoreInfoCacheUpdater {
         // Get the coinId associated with the store
         const coinId = getCoinId(latestStore.coin);
 
-        console.log(`!!! Waiting for coin to be spent: ${coinId.toString("hex")}`);
+        console.log(`Waiting for coin to be spent: ${coinId.toString("hex")}`);
 
         // Wait for the coin to be spent
         await peer.waitForCoinToBeSpent(
@@ -153,7 +165,6 @@ export class StoreInfoCacheUpdater {
 
         try {
           // When resolved, sync the store
-          //const { latestStore: updatedStore, latestHeight: newHeight } = await withTimeout(
           const storeInfo = await withTimeout(
             peer.syncStore(
               latestStore,
@@ -225,8 +236,6 @@ export class StoreInfoCacheUpdater {
 
   private isUnrecoverableError(error: any): boolean {
     // Determine whether the error is unrecoverable
-    // For this example, we'll treat any unexpected error as unrecoverable
-    // You can customize this logic based on your application's needs
     return true;
   }
 }
