@@ -1,6 +1,6 @@
 {
   "name": "@dignetwork/dig-sdk",
-  "version": "0.0.1-alpha.115",
+  "version": "0.0.1-alpha.116",
   "description": "",
   "type": "commonjs",
   "main": "./dist/index.js",
