@@ -17,20 +17,23 @@ export class StoreInfoCacheUpdater {
     latestStore: ReturnType<DataStoreSerializer["serialize"]>;
     latestHeight: number;
     latestHash: string;
-  }>;
+  }> = new FileCache(`stores`, USER_DIR_PATH);
   private monitors: Map<string, Promise<void>> = new Map();
   private lockFilePath: string;
   private releaseLock: (() => Promise<void>) | null = null;
   private isMonitoring: boolean = true;
+  private lockRenewalInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
-    this.storeCoinCache = new FileCache(`stores`, USER_DIR_PATH);
+    console.log("Constructor: Initializing StoreInfoCacheUpdater");
 
     // Construct lock file path using the path module
     this.lockFilePath = path.join(USER_DIR_PATH, "store-info-cache.lock");
+    console.log("Lock file path:", this.lockFilePath);
 
     const lockDir = path.dirname(this.lockFilePath);
     if (!fs.existsSync(lockDir)) {
+      console.log(`Creating lock directory: ${lockDir}`);
       fs.mkdirSync(lockDir, { recursive: true });
     }
 
@@ -48,35 +51,51 @@ export class StoreInfoCacheUpdater {
 
   private async startMonitors() {
     try {
-      // Check if the lockfile is already held
-      const isLocked = await lockfile.check(this.lockFilePath, {
-        realpath: false,
-      });
-      if (isLocked) {
-        // Another process is already running the monitors; skip starting monitors
-        console.log(
-          "Another process is already running the StoreInfoCacheUpdater."
-        );
-        return;
+      console.log("Checking if lockfile exists...");
+      
+      // Check if the lock file exists
+      if (!fs.existsSync(this.lockFilePath)) {
+        console.log("Lockfile does not exist. Proceeding without lock.");
+      } else {
+        // Check if the lockfile is already held
+        const isLocked = await lockfile.check(this.lockFilePath, {
+          realpath: false,
+        });
+        if (isLocked) {
+          console.log(
+            "Another process is already running the StoreInfoCacheUpdater."
+          );
+          return;
+        }
       }
 
       // Attempt to acquire the lock
+      console.log("Attempting to acquire lock...");
       this.releaseLock = await lockfile.lock(this.lockFilePath, {
         retries: {
           retries: 0, // No retries since we only need one lock
         },
-        stale: 60000, // Lock expires after 1 minute (adjust as needed)
+        stale: 60000, // Lock expires after 1 minute
         realpath: false, // Ensure lockfile uses the exact path
       });
 
+      console.log("Lock acquired, starting monitors...");
+      
+      // Renew the lock every minute by reacquiring it
+      this.renewLock();
+
       const storeIds = this.storeCoinCache.getCachedKeys();
+      console.log(`Found ${storeIds.length} store IDs in cache:`, storeIds);
 
       for (const storeId of storeIds) {
         // Check if a monitor is already running for this storeId
         if (!this.monitors.has(storeId)) {
+          console.log(`Starting monitor for storeId: ${storeId}`);
           // Start monitoring in the background
           const monitorPromise = this.monitorStore(storeId);
           this.monitors.set(storeId, monitorPromise);
+        } else {
+          console.log(`Monitor already exists for storeId: ${storeId}`);
         }
       }
 
@@ -84,7 +103,7 @@ export class StoreInfoCacheUpdater {
 
       // Wait for all monitors to settle
       const monitorPromises = Array.from(this.monitors.values());
-
+      console.log("Waiting for all monitor promises to settle...");
       await Promise.all(monitorPromises);
     } catch (error: any) {
       console.error("Monitor system encountered an error:", error);
@@ -92,13 +111,44 @@ export class StoreInfoCacheUpdater {
       // Release the lock
       if (this.releaseLock) {
         try {
+          console.log("Releasing lock...");
           await this.releaseLock();
           console.log("Lock released successfully.");
         } catch (releaseError) {
           console.error("Error releasing the lock:", releaseError);
         }
       }
+      // Clear the lock renewal interval
+      if (this.lockRenewalInterval) {
+        clearInterval(this.lockRenewalInterval);
+        this.lockRenewalInterval = null;
+      }
     }
+  }
+
+  private renewLock() {
+    // Set up a renewal process that releases and reacquires the lock every minute
+    this.lockRenewalInterval = setInterval(async () => {
+      try {
+        if (this.releaseLock) {
+          console.log("Releasing the lock for renewal...");
+          await this.releaseLock();
+          console.log("Lock released for renewal.");
+        }
+
+        // Reacquire the lock
+        this.releaseLock = await lockfile.lock(this.lockFilePath, {
+          retries: {
+            retries: 0, // No retries since we only need one lock
+          },
+          stale: 60000, // Lock expires after 1 minute
+          realpath: false, // Ensure lockfile uses the exact path
+        });
+        console.log("Lock reacquired for renewal.");
+      } catch (error) {
+        console.error("Error renewing the lock:", error);
+      }
+    }, 60000); // Renew the lock every 60 seconds
   }
 
   // Monitor a single store's coin
@@ -138,7 +188,7 @@ export class StoreInfoCacheUpdater {
         // Get the coinId associated with the store
         const coinId = getCoinId(latestStore.coin);
 
-        console.log(`!!! Waiting for coin to be spent: ${coinId.toString("hex")}`);
+        console.log(`Waiting for coin to be spent: ${coinId.toString("hex")}`);
 
         // Wait for the coin to be spent
         await peer.waitForCoinToBeSpent(
@@ -153,7 +203,6 @@ export class StoreInfoCacheUpdater {
 
         try {
           // When resolved, sync the store
-          //const { latestStore: updatedStore, latestHeight: newHeight } = await withTimeout(
           const storeInfo = await withTimeout(
             peer.syncStore(
               latestStore,
@@ -224,9 +273,6 @@ export class StoreInfoCacheUpdater {
   }
 
   private isUnrecoverableError(error: any): boolean {
-    // Determine whether the error is unrecoverable
-    // For this example, we'll treat any unexpected error as unrecoverable
-    // You can customize this logic based on your application's needs
     return true;
   }
 }
