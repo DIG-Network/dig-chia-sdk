@@ -319,34 +319,69 @@ export class DataStore {
         latestStore: ReturnType<DataStoreSerializer["serialize"]>;
         latestHeight: number;
         latestHash: string;
-      }>(`stores`, USER_DIR_PATH);
+      }>(`stores`);
 
-      if (!Environment.CLI_MODE) {
-        // Kick off the updater instance in the backgounf if not already running
-        StoreInfoCacheUpdater.initInstance();
+      // Try to get cached store info
+      const cachedInfo = storeCoinCache.get(this.storeId);
 
-        // Try to get cached store info
-        const cachedInfo = storeCoinCache.get(this.storeId);
+      if (cachedInfo) {
+        try {
+          const {
+            latestStore: serializedStore,
+            latestHeight: previousHeight,
+            latestHash: previousHash,
+          } = cachedInfo;
 
-        if (cachedInfo) {
-          // If we have cached info, return it directly
-          const { latestStore } = DataStoreSerializer.deserialize(
+          // Deserialize the stored data using DataStoreSerializer
+          const { latestStore: previousInfo } = DataStoreSerializer.deserialize(
             {
-              latestStore: cachedInfo.latestStore,
-              latestHeight: cachedInfo.latestHeight.toString(),
-              latestHash: cachedInfo.latestHash,
+              latestStore: serializedStore,
+              latestHeight: previousHeight.toString(),
+              latestHash: previousHash,
             }
           );
 
+          // Sync with peer if necessary
+          const peer = await FullNodePeer.connect();
+          const { latestStore, latestHeight } = await peer.syncStore(
+            previousInfo,
+            previousHeight,
+            Buffer.from(previousHash, "hex"),
+            false
+          );
+          const latestHash = await peer.getHeaderHash(latestHeight);
+
+          // Serialize the store data for caching
+          const serializedLatestStore = new DataStoreSerializer(
+            latestStore,
+            latestHeight,
+            latestHash
+          ).serialize();
+
+          // Cache updated store info
+          storeCoinCache.set(this.storeId, {
+            latestStore: serializedLatestStore,
+            latestHeight,
+            latestHash: latestHash.toString("hex"),
+          });
+
+          return { latestStore, latestHeight, latestHash };
+        } catch {
+          // Return cached info if sync fails
+          const { latestStore, latestHeight, latestHash } =
+            DataStoreSerializer.deserialize({
+              latestStore: cachedInfo.latestStore,
+              latestHeight: cachedInfo.latestHeight.toString(),
+              latestHash: cachedInfo.latestHash,
+            });
           return {
             latestStore,
-            latestHeight: cachedInfo.latestHeight,
-            latestHash: Buffer.from(cachedInfo.latestHash, "hex"),
+            latestHeight,
+            latestHash: latestHash,
           };
         }
       }
 
-      // If no cached info, proceed to fetch and cache it
       // Use getCreationHeight to retrieve height and hash information
       const { createdAtHeight, createdAtHash } = await this.getCreationHeight();
 
