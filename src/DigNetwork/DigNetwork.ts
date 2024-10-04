@@ -38,17 +38,15 @@ export class DigNetwork {
     storeId: string,
     rootHash: string,
     key?: string,
-    intialBlackList: string[] = []
+    initialBlackList: string[] = []
   ): Promise<DigPeer | null> {
-    const peerBlackList: string[] = intialBlackList;
+    const peerBlackList: string[] = initialBlackList;
     const serverCoin = new ServerCoin(storeId);
-    let peerIp: string | null = null;
 
-    // Keep sampling peers until an empty array is returned
     while (true) {
       try {
-        // Sample a peer from the current epoch
-        const digPeers = await serverCoin.sampleCurrentEpoch(1, peerBlackList);
+        // Sample 10 peers from the current epoch
+        const digPeers = await serverCoin.sampleCurrentEpoch(10, peerBlackList);
 
         // If no peers are returned, break out of the loop
         if (digPeers.length === 0) {
@@ -56,45 +54,62 @@ export class DigNetwork {
           break;
         }
 
-        peerIp = digPeers[0];
-        const digPeer = new DigPeer(peerIp, storeId);
+        // Create a race of promises for all peers
+        const peerPromises = digPeers.map((peerIp) => {
+          return new Promise<DigPeer | null>(async (resolve) => {
+            try {
+              const digPeer = new DigPeer(peerIp, storeId);
+              const { storeExists, rootHashExists } =
+                await digPeer.propagationServer.checkStoreExists(rootHash);
 
-        // Try to fetch the head store information
-        const { storeExists, rootHashExists } =
-          await digPeer.propagationServer.checkStoreExists(rootHash);
+              // Check if the store and root hash exist on the peer
+              if (storeExists && rootHashExists) {
+                console.log(
+                  `Found Peer at ${peerIp} for storeId: ${storeId}, root hash ${rootHash}`
+                );
 
-        // If the peer has the correct root hash, check if key is required
-        if (storeExists && rootHashExists) {
-          console.log(
-            `Found Peer at ${peerIp} for storeId: ${storeId}, root hash ${rootHash}`
-          );
+                // If no key is provided, resolve the peer
+                if (!key) {
+                  return resolve(digPeer);
+                }
 
-          // If no key is provided, return the peer
-          if (!key) {
-            return digPeer;
-          }
+                // If key is provided, check if the peer has it
+                const keyResponse = await digPeer.contentServer.headKey(
+                  key,
+                  rootHash
+                );
+                if (keyResponse.headers?.["x-key-exists"] === "true") {
+                  return resolve(digPeer);
+                }
+              }
+            } catch (error) {
+              console.error(`Error connecting to DIG Peer ${peerIp}.`);
+            }
 
-          // If key is provided, check if the peer has it
-          const keyResponse = await digPeer.contentServer.headKey(
-            key,
-            rootHash
-          );
-          if (keyResponse.headers?.["x-key-exists"] === "true") {
-            return digPeer;
-          }
+            // If the peer does not meet the criteria, resolve with null
+            resolve(null);
+          });
+        });
+
+        // Wait for the first valid peer that resolves
+        const firstValidPeer = await Promise.race(peerPromises);
+
+        // If a valid peer is found, return it
+        if (firstValidPeer) {
+          return firstValidPeer;
         }
 
-        // Add peer to blacklist if it doesn't meet criteria
-        peerBlackList.push(peerIp);
+        // If none of the peers were valid, add them to the blacklist
+        digPeers.forEach((peerIp) => peerBlackList.push(peerIp));
+
+        // Retry with the next set of peers
+        console.log("No valid peers found, retrying with new peers...");
       } catch (error) {
-        console.error(`Error connecting to DIG Peer ${peerIp}. Resampling...`);
-        if (peerIp) {
-          peerBlackList.push(peerIp); // Add to blacklist if error occurs
-        }
+        console.error("Error sampling peers. Resampling...");
       }
     }
 
-    // Return null if no valid peer was found
+    // Return null if no valid peer was found after all attempts
     return null;
   }
 
@@ -105,7 +120,10 @@ export class DigNetwork {
     fs.unlinkSync(path.join(DIG_FOLDER_PATH, "stores", storeId + ".json"));
   }
 
-  public static async pingNetworkOfUpdate(storeId: string, rootHash: string): Promise<void> {
+  public static async pingNetworkOfUpdate(
+    storeId: string,
+    rootHash: string
+  ): Promise<void> {
     const serverCoin = new ServerCoin(storeId);
     // When an update is made, ping 10 network peers to pull updates from this store
     const digPeers = await serverCoin.sampleCurrentEpoch(10);
@@ -115,7 +133,7 @@ export class DigNetwork {
         digPeer.propagationServer.pingUpdate(rootHash),
         5000,
         `headKey timed out for peer ${digPeer.IpAddress}`
-      )
+      );
     }
   }
 
@@ -213,8 +231,11 @@ export class DigNetwork {
             }
           }
         }
-        
-        DigNetwork.pingNetworkOfUpdate(this.dataStore.StoreId, rootInfo.root_hash);
+
+        DigNetwork.pingNetworkOfUpdate(
+          this.dataStore.StoreId,
+          rootInfo.root_hash
+        );
       }
 
       console.log("Syncing store complete.");
