@@ -377,8 +377,8 @@ export class DataStore {
           console.log("Monitor:", `Syncing store for storeId: ${storeId}`);
           const { latestStore, latestHeight } = await peer.syncStore(
             previousStore.latestStore,
-            previousStore.latestHeight,
-            previousStore.latestHash,
+            createdAtHeight,
+            createdAtHash,
             false
           );
           const latestHash = await peer.getHeaderHash(latestHeight);
