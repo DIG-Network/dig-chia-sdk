@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.131](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.130...v0.0.1-alpha.131) (2024-10-04)
+
+
+### Features
+
+* speed up findpeerwith key ([9de9394](https://github.com/DIG-Network/dig-chia-sdk/commit/9de93949d0a8d9660c17f41e3e7de64238fed4ac))
+
 ### [0.0.1-alpha.130](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.129...v0.0.1-alpha.130) (2024-10-04)
 
 
