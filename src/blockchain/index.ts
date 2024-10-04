@@ -5,3 +5,4 @@ export * from'./FullNodePeer';
 export * from './DataStoreSerializer';
 export * from './ServerCoin';
 export * from "./Wallet";
+export * from './StoreMonitorRegistry';

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.126](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.125...v0.0.1-alpha.126) (2024-10-04)
+
+
+### Features
+
+* add store monitor registry ([cf1394d](https://github.com/DIG-Network/dig-chia-sdk/commit/cf1394d21855fba9026fbec29dea2eb9fa1a6db7))
+* add store monitor registry ([a85409b](https://github.com/DIG-Network/dig-chia-sdk/commit/a85409be852eca1842d7d07c6b465ef1e9ab1e43))
+
 ### [0.0.1-alpha.125](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.124...v0.0.1-alpha.125) (2024-10-04)
 
 ### [0.0.1-alpha.124](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.123...v0.0.1-alpha.124) (2024-10-04)

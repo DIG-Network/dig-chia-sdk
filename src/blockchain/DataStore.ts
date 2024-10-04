@@ -1,4 +1,4 @@
-import fs, { read } from "fs";
+import fs from "fs";
 import path from "path";
 import {
   writerDelegatedPuzzleFromKey,
@@ -22,11 +22,10 @@ import {
   MIN_HEIGHT_HEADER_HASH,
   getActiveStoreId,
   STORE_PATH,
-  USER_DIR_PATH,
 } from "../utils/config";
 import { calculateFeeForCoinSpends } from "./coins";
-import { RootHistoryItem, DatFile } from "../types";
-import { green, red } from "colorette";
+import { RootHistoryItem } from "../types";
+import { red } from "colorette";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
 import {
   DataIntegrityTree,
@@ -38,9 +37,7 @@ import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import NodeCache from "node-cache";
 import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
-import { StoreInfoCacheUpdater } from "./StoreInfoCacheUpdater";
-import { Environment } from "../utils";
-import { get } from "lodash";
+import { StoreMonitorRegistry } from "./StoreMonitorRegistry";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
 const rootHistoryCache = new NodeCache({ stdTTL: 180 });
@@ -68,10 +65,6 @@ export class DataStore {
     }
 
     this.tree = new DataIntegrityTree(storeId, _options);
-
-    if (!Environment.CLI_MODE) {
-      DataStore.monitorStoreIndefinitely(this.storeId);
-    }
   }
 
   public get StoreId(): string {
@@ -314,243 +307,47 @@ export class DataStore {
     return storIds.map((storeId) => DataStore.from(storeId));
   }
 
-   /**
-   * Monitors the store indefinitely by syncing it with a peer.
-   * Logs store retrieval and caching operations. If an error occurs, logs the error and restarts the process after a short delay.
-   * Only one monitor can be active per storeId.
-   * @param {string} storeId - The store identifier to monitor.
-   * @returns {Promise<void>} Never resolves; runs indefinitely.
+  /**
+   * Fetches the latest coin information using the StoreMonitorRegistry.
+   * Registers the storeId if it's not already registered, retrieves the cached value, and returns it.
+   *
+   * @returns {Promise<{ latestStore: DataStoreDriver; latestHeight: number; latestHash: Buffer }>}
    */
-   public static async monitorStoreIndefinitely(storeId: string): Promise<void> {
-    // Check if a monitor is already running for this storeId
-    if (this.activeMonitors.get(storeId)) {
-      console.log("Monitor:", `Monitor already running for storeId: ${storeId}`);
-      return;
-    }
-
-    // Set the monitor as active
-    this.activeMonitors.set(storeId, true);
-
-    const storeCoinCache = new FileCache<{
-      latestStore: ReturnType<DataStoreSerializer["serialize"]>;
-      latestHeight: number;
-      latestHash: string;
-    }>(`stores`);
-
-    // Clear the cache at the start
-    console.log("Monitor:", `Clearing cache for storeId: ${storeId}`);
-    storeCoinCache.delete(storeId);
-
-    while (true) {
-      try {
-        console.log("Monitor:", `Connecting to peer for storeId: ${storeId}`);
-        const peer = await FullNodePeer.connect();
-        const cachedInfo = storeCoinCache.get(storeId);
-
-        if (cachedInfo) {
-          // Log cached store info retrieval
-          console.log(
-            "Monitor:", `Cached store info found for storeId: ${storeId}, syncing...`
-          );
-
-          // Deserialize cached info and wait for the coin to be spent
-          const previousStore = DataStoreSerializer.deserialize({
-            latestStore: cachedInfo.latestStore,
-            latestHeight: cachedInfo.latestHeight.toString(),
-            latestHash: cachedInfo.latestHash,
-          });
-
-          console.log(
-            "Monitor:", `Waiting for coin to be spent for storeId: ${storeId}...`
-          );
-
-          const dataStore = DataStore.from(storeId);
-          const { createdAtHeight, createdAtHash } = await dataStore.getCreationHeight();
-
-          await peer.waitForCoinToBeSpent(
-            getCoinId(previousStore.latestStore.coin),
-            createdAtHeight,
-            createdAtHash
-          );
-
-          // Sync store and get updated details
-          console.log("Monitor:", `Syncing store for storeId: ${storeId}`);
-          const { latestStore, latestHeight } = await peer.syncStore(
-            previousStore.latestStore,
-            createdAtHeight,
-            createdAtHash,
-            false
-          );
-          const latestHash = await peer.getHeaderHash(latestHeight);
-
-          console.log("Monitor:", `Store synced for storeId: ${storeId}, coin id: ${getCoinId(latestStore.coin).toString("hex")}`);
-
-          // Serialize and cache the updated store info
-          const serializedLatestStore = new DataStoreSerializer(
-            latestStore,
-            latestHeight,
-            latestHash
-          ).serialize();
-
-          console.log("Monitor:", `Caching updated store info for storeId: ${storeId}`);
-          storeCoinCache.set(storeId, {
-            latestStore: serializedLatestStore,
-            latestHeight,
-            latestHash: latestHash.toString("hex"),
-          });
-
-          continue; // Continue monitoring
-        }
-
-        // If no cached info exists, log and sync from the creation height
-        console.log(
-          "Monitor:", `No cached info found for storeId: ${storeId}. Retrieving creation height.`
-        );
-
-        const dataStore = DataStore.from(storeId);
-        const { createdAtHeight, createdAtHash } = await dataStore.getCreationHeight();
-
-        // Sync store from the peer using launcher ID
-        console.log("Monitor:", `Syncing store from launcher ID for storeId: ${storeId}`);
-        const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
-          Buffer.from(storeId, "hex"),
-          createdAtHeight,
-          createdAtHash,
-          false
-        );
-
-        const latestHash = await peer.getHeaderHash(latestHeight);
-
-        // Serialize and cache the new store info
-        const serializedLatestStore = new DataStoreSerializer(
-          latestStore,
-          latestHeight,
-          latestHash
-        ).serialize();
-
-        console.log("Monitor:", `Caching new store info for storeId: ${storeId}`);
-        storeCoinCache.set(storeId, {
-          latestStore: serializedLatestStore,
-          latestHeight,
-          latestHash: latestHash.toString("hex"),
-        });
-      } catch (error: any) {
-        console.error(
-          "Monitor:", `Error in monitorStoreIndefinitely for storeId: ${storeId} - ${error.message}`
-        );
-
-        // Delay before restarting to avoid rapid retries
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
-    }
-  }
-
   public async fetchCoinInfo(): Promise<{
     latestStore: DataStoreDriver;
     latestHeight: number;
     latestHash: Buffer;
   }> {
+    const storeMonitor = StoreMonitorRegistry.getInstance();
+
     try {
-      // Initialize the cache for the current storeId's coin info
-      const storeCoinCache = new FileCache<{
-        latestStore: ReturnType<DataStoreSerializer["serialize"]>;
-        latestHeight: number;
-        latestHash: string;
-      }>(`stores`);
-
-      // Try to get cached store info
-      const cachedInfo = storeCoinCache.get(this.storeId);
-
-      if (cachedInfo) {
-        try {
-          const {
-            latestStore: serializedStore,
-            latestHeight: previousHeight,
-            latestHash: previousHash,
-          } = cachedInfo;
-
-          // Deserialize the stored data using DataStoreSerializer
-          const { latestStore: previousInfo } = DataStoreSerializer.deserialize(
-            {
-              latestStore: serializedStore,
-              latestHeight: previousHeight.toString(),
-              latestHash: previousHash,
-            }
-          );
-
-          // Sync with peer if necessary
-          const peer = await FullNodePeer.connect();
-          const { latestStore, latestHeight } = await peer.syncStore(
-            previousInfo,
-            previousHeight,
-            Buffer.from(previousHash, "hex"),
-            false
-          );
-          const latestHash = await peer.getHeaderHash(latestHeight);
-
-          // Serialize the store data for caching
-          const serializedLatestStore = new DataStoreSerializer(
-            latestStore,
-            latestHeight,
-            latestHash
-          ).serialize();
-
-          // Cache updated store info
-          storeCoinCache.set(this.storeId, {
-            latestStore: serializedLatestStore,
-            latestHeight,
-            latestHash: latestHash.toString("hex"),
-          });
-
-          return { latestStore, latestHeight, latestHash };
-        } catch {
-          // Return cached info if sync fails
-          const { latestStore, latestHeight, latestHash } =
-            DataStoreSerializer.deserialize({
-              latestStore: cachedInfo.latestStore,
-              latestHeight: cachedInfo.latestHeight.toString(),
-              latestHash: cachedInfo.latestHash,
-            });
-          return {
-            latestStore,
-            latestHeight,
-            latestHash: latestHash,
-          };
-        }
-      }
-
-      // Use getCreationHeight to retrieve height and hash information
-      const { createdAtHeight, createdAtHash } = await this.getCreationHeight();
-
-      // Sync store from peer
-      const peer = await FullNodePeer.connect();
-      const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
-        Buffer.from(this.storeId, "hex"),
-        createdAtHeight,
-        createdAtHash,
-        false
-      );
-
-      const latestHash = await peer.getHeaderHash(latestHeight);
-
-      // Serialize the latest store info for caching
-      const serializedLatestStore = new DataStoreSerializer(
-        latestStore,
-        latestHeight,
-        latestHash
-      ).serialize();
-
-      // Cache the latest store info
-      storeCoinCache.set(this.storeId, {
-        latestStore: serializedLatestStore,
-        latestHeight,
-        latestHash: latestHash.toString("hex"),
+      // Register the storeId with a no-op callback. If already registered, the registry will handle it.
+      await storeMonitor.registerStore(this.storeId, () => {
+        // No operation callback since we're fetching the cache directly
       });
 
-      return { latestStore, latestHeight, latestHash };
-    } catch (error) {
-      console.trace("Failed to fetch coin info", error);
-      throw error;
+      // Retrieve the latest cached store information
+      const cachedInfo = await storeMonitor.getLatestCache(this.storeId);
+
+      if (!cachedInfo) {
+        throw new Error(`No cached info found for storeId: ${this.storeId}`);
+      }
+
+      const deserializedStore = DataStoreSerializer.deserialize({
+        latestStore: cachedInfo.latestStore,
+        latestHeight: cachedInfo.latestHeight.toString(),
+        latestHash: cachedInfo.latestHash
+      });
+
+      return {
+        latestStore: deserializedStore.latestStore,
+        latestHeight: deserializedStore.latestHeight,
+        latestHash: deserializedStore.latestHash,
+      };
+    } catch (error: any) {
+      throw new Error(
+        `Failed to fetch coin info for storeId ${this.storeId}: ${error.message}`
+      );
     }
   }
 
