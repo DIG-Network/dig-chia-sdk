@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.130](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.129...v0.0.1-alpha.130) (2024-10-04)
+
+
+### Features
+
+* add timeout to pingupdate ([f95e4cf](https://github.com/DIG-Network/dig-chia-sdk/commit/f95e4cf9285b23e296e9f998d137443792d80e04))
+
 ### [0.0.1-alpha.129](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.128...v0.0.1-alpha.129) (2024-10-04)
 
 
