@@ -107,6 +107,7 @@ export class DigNetwork {
 
   public static async pingNetworkOfUpdate(storeId: string, rootHash: string): Promise<void> {
     const serverCoin = new ServerCoin(storeId);
+    // When an update is made, ping 10 network peers to pull updates from this store
     const digPeers = await serverCoin.sampleCurrentEpoch(10);
     for (const peer of digPeers) {
       const digPeer = new DigPeer(peer, storeId);
