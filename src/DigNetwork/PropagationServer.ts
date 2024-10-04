@@ -81,6 +81,53 @@ export class PropagationServer {
   }
 
   /**
+   * Ping the current peer about an update to the store, passing rootHash.
+   * @param rootHash - The root hash for the store update.
+   */
+  async pingUpdate(rootHash: string): Promise<void> {
+    const spinner = createSpinner(`Pinging peer ${this.ipAddress}...`).start();
+
+    try {
+      const httpsAgent = this.createHttpsAgent();
+      const url = `https://${formatHost(this.ipAddress)}:${
+        PropagationServer.port
+      }/update`;
+
+      const config: AxiosRequestConfig = {
+        httpsAgent,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      };
+
+      // Data to send in the request (storeId and rootHash)
+      const data = {
+        storeId: this.storeId,
+        rootHash: rootHash,
+        updateTime: new Date().toISOString(),
+      };
+
+      try {
+        const response = await axios.post(url, data, config);
+        console.log(green(`✔ Successfully pinged peer: ${this.ipAddress}`));
+        spinner.success({
+          text: green(
+            `✔ Successfully pinged peer ${this.ipAddress} with rootHash ${rootHash}`
+          ),
+        });
+        return response.data;
+      } catch (error: any) {
+        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
+        console.error(red(error.message));
+        throw error;
+      }
+    } catch (error: any) {
+      spinner.error({ text: red("✖ Error pinging network peer.") });
+      console.error(red(error.message));
+    }
+  }
+
+  /**
    * Adds a custom inactivity timeout for large file transfers.
    */
   addInactivityTimeout(stream: PassThrough, timeoutMs: number) {
@@ -253,7 +300,11 @@ export class PropagationServer {
    * Upload a file to the server by sending a PUT request.
    * Logs progress using a local cli-progress bar.
    */
-  async uploadFile(label: string, dataPath: string, uncompress: boolean = false) {
+  async uploadFile(
+    label: string,
+    dataPath: string,
+    uncompress: boolean = false
+  ) {
     const filePath = path.join(STORE_PATH, this.storeId, dataPath);
 
     const { nonce, fileExists } = await this.getFileNonce(dataPath);
