@@ -3,6 +3,7 @@ import { FileCache, USER_DIR_PATH } from "../utils";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import { DataStore } from "./DataStore";
 import { getCoinId } from "@dignetwork/datalayer-driver";
+import { Environment } from "../utils";
 
 /**
  * Represents the structure of cached store information.
@@ -43,7 +44,10 @@ export class StoreMonitorRegistry {
    */
   private constructor() {
     this.activeMonitors = new Map();
-    this.storeCoinCache = new FileCache<StoreCacheEntry>("stores", USER_DIR_PATH);
+    this.storeCoinCache = new FileCache<StoreCacheEntry>(
+      "stores",
+      USER_DIR_PATH
+    );
     this.cachePopulationPromises = new Map();
   }
 
@@ -89,12 +93,15 @@ export class StoreMonitorRegistry {
       // For this example, we'll proceed to start the monitor
     }
 
-    // Start monitoring asynchronously
-    this.startMonitor(storeId, callback).catch((error) => {
-      console.error(
-        `Registry: Unexpected error in startMonitor for storeId: ${storeId} - ${error.message}`
-      );
-    });
+    // No monitoring in cli mode
+    if (!Environment.CLI_MODE) {
+      // Start monitoring asynchronously
+      this.startMonitor(storeId, callback).catch((error) => {
+        console.error(
+          `Registry: Unexpected error in startMonitor for storeId: ${storeId} - ${error.message}`
+        );
+      });
+    }
   }
 
   /**
@@ -104,17 +111,22 @@ export class StoreMonitorRegistry {
    * @returns {Promise<StoreCacheEntry>} The latest cached entry.
    */
   public async getLatestCache(storeId: string): Promise<StoreCacheEntry> {
-    let cachedInfo = this.storeCoinCache.get(storeId);
-    if (cachedInfo) {
-      return cachedInfo;
-    }
+    // if in CLI mode, always fetch the latest store info directly
+    if (!Environment.CLI_MODE) {
+      let cachedInfo = this.storeCoinCache.get(storeId);
+      if (cachedInfo) {
+        return cachedInfo;
+      }
 
-    // If cache is missing, fetch and cache it
-    console.log(`getLatestCache: No cache found for storeId: ${storeId}. Fetching...`);
+      // If cache is missing, fetch and cache it
+      console.log(
+        `getLatestCache: No cache found for storeId: ${storeId}. Fetching...`
+      );
 
-    // Prevent duplicate fetches for the same storeId
-    if (this.cachePopulationPromises.has(storeId)) {
-      return this.cachePopulationPromises.get(storeId)!;
+      // Prevent duplicate fetches for the same storeId
+      if (this.cachePopulationPromises.has(storeId)) {
+        return this.cachePopulationPromises.get(storeId)!;
+      }
     }
 
     const fetchPromise = this.fetchAndCacheStoreInfo(storeId)
@@ -156,7 +168,9 @@ export class StoreMonitorRegistry {
         );
 
         const delayTime = maxRetryDelay;
-        console.log(`Registry: Waiting for ${delayTime / 1000} seconds before retrying...`);
+        console.log(
+          `Registry: Waiting for ${delayTime / 1000} seconds before retrying...`
+        );
         await this.delay(delayTime);
         retryCount++;
       }
@@ -292,7 +306,9 @@ export class StoreMonitorRegistry {
       await dataStore.getCreationHeight();
 
     // Sync store from the peer using launcher ID
-    console.log(`Monitor: Syncing store from launcher ID for storeId: ${storeId}`);
+    console.log(
+      `Monitor: Syncing store from launcher ID for storeId: ${storeId}`
+    );
     const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
       Buffer.from(storeId, "hex"),
       createdAtHeight,
