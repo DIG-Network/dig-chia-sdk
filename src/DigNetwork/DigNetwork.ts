@@ -3,7 +3,7 @@ import * as path from "path";
 import { DigPeer } from "./DigPeer";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
-import { RootHistoryItem } from "../types";
+import { withTimeout } from "../utils";
 import { promisify } from "util";
 
 const rename = promisify(fs.rename);
@@ -111,7 +111,11 @@ export class DigNetwork {
     const digPeers = await serverCoin.sampleCurrentEpoch(10);
     for (const peer of digPeers) {
       const digPeer = new DigPeer(peer, storeId);
-      await digPeer.propagationServer.pingUpdate(rootHash);
+      await withTimeout(
+        digPeer.propagationServer.pingUpdate(rootHash),
+        5000,
+        `headKey timed out for peer ${digPeer.IpAddress}`
+      )
     }
   }
 
