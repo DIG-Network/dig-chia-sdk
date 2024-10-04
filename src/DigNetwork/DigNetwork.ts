@@ -105,7 +105,20 @@ export class DigNetwork {
     fs.unlinkSync(path.join(DIG_FOLDER_PATH, "stores", storeId + ".json"));
   }
 
-  public async syncStoreFromPeers(maxRootsToProcess?: number): Promise<void> {
+  public static async pingNetworkOfUpdate(storeId: string, rootHash: string): Promise<void> {
+    const serverCoin = new ServerCoin(storeId);
+    // When an update is made, ping 10 network peers to pull updates from this store
+    const digPeers = await serverCoin.sampleCurrentEpoch(10);
+    for (const peer of digPeers) {
+      const digPeer = new DigPeer(peer, storeId);
+      await digPeer.propagationServer.pingUpdate(rootHash);
+    }
+  }
+
+  public async syncStoreFromPeers(
+    prioritizedPeer?: DigPeer,
+    maxRootsToProcess?: number
+  ): Promise<void> {
     console.log("Starting file download process...");
     let peerBlackList: string[] = [];
 
@@ -145,12 +158,16 @@ export class DigNetwork {
         while (true) {
           try {
             // Find a peer with the store and root hash
-            selectedPeer = await DigNetwork.findPeerWithStoreKey(
-              this.dataStore.StoreId,
-              rootInfo.root_hash,
-              undefined,
-              peerBlackList
-            );
+            if (prioritizedPeer) {
+              selectedPeer = prioritizedPeer;
+            } else {
+              selectedPeer = await DigNetwork.findPeerWithStoreKey(
+                this.dataStore.StoreId,
+                rootInfo.root_hash,
+                undefined,
+                peerBlackList
+              );
+            }
 
             if (!selectedPeer) {
               console.error(
