@@ -30,6 +30,10 @@ export class DigNetwork {
     await digNetwork.syncStoreFromPeers();
   }
 
+  public static async getUdiContent(udi: string) {
+    // TODO: Implement this method
+  }
+
   public static async findPeerWithStoreKey(
     storeId: string,
     rootHash: string,
