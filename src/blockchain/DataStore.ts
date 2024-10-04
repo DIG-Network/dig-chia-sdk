@@ -324,7 +324,7 @@ export class DataStore {
    public static async monitorStoreIndefinitely(storeId: string): Promise<void> {
     // Check if a monitor is already running for this storeId
     if (this.activeMonitors.get(storeId)) {
-      console.log(`Monitor already running for storeId: ${storeId}`);
+      console.log("Monitor:", `Monitor already running for storeId: ${storeId}`);
       return;
     }
 
@@ -338,19 +338,19 @@ export class DataStore {
     }>(`stores`);
 
     // Clear the cache at the start
-    console.log(`Clearing cache for storeId: ${storeId}`);
+    console.log("Monitor:", `Clearing cache for storeId: ${storeId}`);
     storeCoinCache.delete(storeId);
 
     while (true) {
       try {
-        console.log(`Connecting to peer for storeId: ${storeId}`);
+        console.log("Monitor:", `Connecting to peer for storeId: ${storeId}`);
         const peer = await FullNodePeer.connect();
         const cachedInfo = storeCoinCache.get(storeId);
 
         if (cachedInfo) {
           // Log cached store info retrieval
           console.log(
-            `Cached store info found for storeId: ${storeId}, syncing...`
+            "Monitor:", `Cached store info found for storeId: ${storeId}, syncing...`
           );
 
           // Deserialize cached info and wait for the coin to be spent
@@ -361,16 +361,20 @@ export class DataStore {
           });
 
           console.log(
-            `Waiting for coin to be spent for storeId: ${storeId}...`
+            "Monitor:", `Waiting for coin to be spent for storeId: ${storeId}...`
           );
+
+          const dataStore = DataStore.from(storeId);
+          const { createdAtHeight, createdAtHash } = await dataStore.getCreationHeight();
+
           await peer.waitForCoinToBeSpent(
             getCoinId(previousStore.latestStore.coin),
-            previousStore.latestHeight,
-            previousStore.latestHash
+            createdAtHeight,
+            createdAtHash
           );
 
           // Sync store and get updated details
-          console.log(`Syncing store for storeId: ${storeId}`);
+          console.log("Monitor:", `Syncing store for storeId: ${storeId}`);
           const { latestStore, latestHeight } = await peer.syncStore(
             previousStore.latestStore,
             previousStore.latestHeight,
@@ -386,7 +390,7 @@ export class DataStore {
             latestHash
           ).serialize();
 
-          console.log(`Caching updated store info for storeId: ${storeId}`);
+          console.log("Monitor:", `Caching updated store info for storeId: ${storeId}`);
           storeCoinCache.set(storeId, {
             latestStore: serializedLatestStore,
             latestHeight,
@@ -398,14 +402,14 @@ export class DataStore {
 
         // If no cached info exists, log and sync from the creation height
         console.log(
-          `No cached info found for storeId: ${storeId}. Retrieving creation height.`
+          "Monitor:", `No cached info found for storeId: ${storeId}. Retrieving creation height.`
         );
 
         const dataStore = DataStore.from(storeId);
         const { createdAtHeight, createdAtHash } = await dataStore.getCreationHeight();
 
         // Sync store from the peer using launcher ID
-        console.log(`Syncing store from launcher ID for storeId: ${storeId}`);
+        console.log("Monitor:", `Syncing store from launcher ID for storeId: ${storeId}`);
         const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
           Buffer.from(storeId, "hex"),
           createdAtHeight,
@@ -422,7 +426,7 @@ export class DataStore {
           latestHash
         ).serialize();
 
-        console.log(`Caching new store info for storeId: ${storeId}`);
+        console.log("Monitor:", `Caching new store info for storeId: ${storeId}`);
         storeCoinCache.set(storeId, {
           latestStore: serializedLatestStore,
           latestHeight,
@@ -430,7 +434,7 @@ export class DataStore {
         });
       } catch (error: any) {
         console.error(
-          `Error in monitorStoreIndefinitely for storeId: ${storeId} - ${error.message}`
+          "Monitor:", `Error in monitorStoreIndefinitely for storeId: ${storeId} - ${error.message}`
         );
 
         // Delay before restarting to avoid rapid retries
