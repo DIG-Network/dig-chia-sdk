@@ -383,6 +383,8 @@ export class DataStore {
           );
           const latestHash = await peer.getHeaderHash(latestHeight);
 
+          console.log("Monitor:", `Store synced for storeId: ${storeId}, coin id: ${getCoinId(latestStore.coin).toString("hex")}`);
+
           // Serialize and cache the updated store info
           const serializedLatestStore = new DataStoreSerializer(
             latestStore,
