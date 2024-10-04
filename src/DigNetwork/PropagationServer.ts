@@ -84,6 +84,39 @@ export class PropagationServer {
    * Ping the current peer about an update to the store, passing rootHash.
    * @param rootHash - The root hash for the store update.
    */
+  async getMyPublicIp(rootHash: string): Promise<void> {
+    try {
+      const httpsAgent = this.createHttpsAgent();
+      const url = `https://${formatHost(this.ipAddress)}:${
+        PropagationServer.port
+      }/peer`;
+
+      const config: AxiosRequestConfig = {
+        httpsAgent,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      };
+
+      try {
+        const response = await axios.get(url, config);
+        console.log(green(`✔ Successfully pinged peer: ${this.ipAddress}`));
+
+        return response.data;
+      } catch (error: any) {
+        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
+        console.error(red(error.message));
+        throw error;
+      }
+    } catch (error: any) {
+      console.error(red(error.message));
+    }
+  }
+
+  /**
+   * Ping the current peer about an update to the store, passing rootHash.
+   * @param rootHash - The root hash for the store update.
+   */
   async pingUpdate(rootHash: string): Promise<void> {
     const spinner = createSpinner(`Pinging peer ${this.ipAddress}...`).start();
 

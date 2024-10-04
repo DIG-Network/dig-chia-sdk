@@ -209,6 +209,8 @@ export class DigNetwork {
             }
           }
         }
+        
+        DigNetwork.pingNetworkOfUpdate(this.dataStore.StoreId, rootInfo.root_hash);
       }
 
       console.log("Syncing store complete.");
