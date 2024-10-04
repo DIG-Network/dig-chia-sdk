@@ -4,11 +4,12 @@ import fs from "fs";
 import { Peer, Tls } from "@dignetwork/datalayer-driver";
 import { resolve4 } from "dns/promises";
 import net from "net";
-import { memoize } from "lodash";
 import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { Environment } from "../utils/Environment";
+import NodeCache from "node-cache";
 
+// Constants
 const FULLNODE_PORT = 8444;
 const LOCALHOST = "127.0.0.1";
 const CHIA_NODES_HOST = "chia-nodes";
@@ -18,30 +19,94 @@ const DNS_HOSTS = [
   "seeder.dexie.space",
   "chia.hoffmang.com",
 ];
-const CONNECTION_TIMEOUT = 2000;
-const CACHE_DURATION = 30000; // Cache duration in milliseconds
+const CONNECTION_TIMEOUT = 2000; // in milliseconds
+const CACHE_DURATION = 30000; // in milliseconds
+const COOLDOWN_DURATION = 60000; // in milliseconds
+const MAX_PEERS_TO_FETCH = 5; // Maximum number of peers to fetch from DNS
+const MAX_RETRIES = 3; // Maximum number of retry attempts
 
+/**
+ * Represents a peer with its reliability weight and address.
+ */
+interface PeerInfo {
+  peer: Peer;
+  weight: number;
+  address: string;
+}
+
+/**
+ * FullNodePeer manages connections to full nodes, prioritizing certain peers and handling reliability.
+ */
 export class FullNodePeer {
+  // Singleton instance
+  private static instance: FullNodePeer | null = null;
+
+  // Cached peer with timestamp
   private static cachedPeer: { peer: Peer; timestamp: number } | null = null;
-  private static memoizedFetchNewPeerIPs: () => Promise<string[]>;
-  private peer: Peer;
-  private static deprioritizedIps: Set<string> = new Set(); // New set for deprioritized IPs
 
-  static {
-    FullNodePeer.memoizedFetchNewPeerIPs = memoize(
-      FullNodePeer.fetchNewPeerIPs
-    );
+  // Cooldown cache to exclude faulty peers temporarily
+  private static cooldownCache = new NodeCache({ stdTTL: COOLDOWN_DURATION / 1000 });
+
+  // Peer reliability weights
+  private static peerWeights: Map<string, number> = new Map();
+
+  // List of prioritized peers
+  private static prioritizedPeers: string[] = [];
+
+  // Map to store PeerInfo
+  private static peerInfos: Map<string, PeerInfo> = new Map();
+
+  // Cache for fetched peer IPs
+  private static peerIPCache = new NodeCache({ stdTTL: CACHE_DURATION / 1000 });
+
+  // Private constructor for singleton pattern
+  private constructor(private peer: Peer) {}
+
+  /**
+   * Retrieves the singleton instance of FullNodePeer.
+   * @returns {FullNodePeer} The singleton instance.
+   */
+  public static getInstance(): FullNodePeer {
+    if (!FullNodePeer.instance) {
+      FullNodePeer.instance = new FullNodePeer(null as any); // Temporarily set to null
+    }
+    return FullNodePeer.instance;
   }
 
-  private constructor(peer: Peer) {
-    this.peer = peer;
+  /**
+   * Initializes the singleton instance by connecting to the best peer.
+   */
+  public async initialize(): Promise<void> {
+    if (this.peer) return; // Already initialized
+
+    try {
+      const bestPeer = await FullNodePeer.getBestPeer();
+      this.peer = bestPeer;
+      FullNodePeer.instance = this; // Assign the initialized instance
+    } catch (error: any) {
+      console.error(`Initialization failed: ${error.message}`);
+      throw error;
+    }
   }
 
+  /**
+   * Connects and returns the best available peer.
+   * Implements singleton behavior.
+   * @returns {Promise<Peer>} The connected Peer instance.
+   */
   public static async connect(): Promise<Peer> {
-    const peer = await FullNodePeer.getBestPeer();
-    return new FullNodePeer(peer).peer;
+    const instance = FullNodePeer.getInstance();
+    await instance.initialize();
+    return instance.peer;
   }
 
+  /**
+   * Checks if a given port on a host is reachable.
+   * @param {string} host - The host IP address.
+   * @param {number} port - The port number.
+   * @param {number} timeout - Connection timeout in milliseconds.
+   * @returns {Promise<boolean>} Whether the port is reachable.
+   */
   private static isPortReachable(
     host: string,
     port: number,
@@ -50,8 +115,14 @@ export class FullNodePeer {
     return new Promise((resolve) => {
       const socket = new net.Socket()
         .setTimeout(timeout)
-        .once("error", () => resolve(false))
-        .once("timeout", () => resolve(false))
+        .once("error", () => {
+          socket.destroy();
+          resolve(false);
+        })
+        .once("timeout", () => {
+          socket.destroy();
+          resolve(false);
+        })
         .connect(port, host, () => {
           socket.end();
           resolve(true);
@@ -59,17 +130,20 @@ export class FullNodePeer {
     });
   }
 
+  /**
+   * Validates an IPv4 address.
+   * @param {string} ip - The IP address to validate.
+   * @returns {boolean} Whether the IP address is valid.
+   */
   private static isValidIpAddress(ip: string): boolean {
     const ipv4Regex =
-      /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+      /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/;
     return ipv4Regex.test(ip);
   }
 
   /**
-   * Retrieves the TRUSTED_FULLNODE IP from the environment
-   * and verifies if it is a valid IP address.
-   *
-   * @returns {string | null} The valid IP address or null if invalid
+   * Retrieves the TRUSTED_FULLNODE IP from the environment and verifies its validity.
+   * @returns {string | null} The trusted full node IP or null if invalid.
    */
   private static getTrustedFullNode(): string | null {
     const trustedNodeIp = Environment.TRUSTED_FULLNODE || null;
@@ -80,30 +154,46 @@ export class FullNodePeer {
     return null;
   }
 
+  /**
+   * Fetches new peer IPs from DNS introducers and prioritized hosts.
+   * Utilizes caching to avoid redundant DNS resolutions.
+   * @returns {Promise<string[]>} An array of reachable peer IPs.
+   */
   private static async fetchNewPeerIPs(): Promise<string[]> {
     const trustedNodeIp = FullNodePeer.getTrustedFullNode();
     const priorityIps: string[] = [];
 
-    // Prioritize trustedNodeIp unless it's deprioritized
+    // Define prioritized peers
+    FullNodePeer.prioritizedPeers = [
+      ...DNS_HOSTS, // Assuming CHIA_NODES_HOST is included in DNS_HOSTS
+      LOCALHOST,
+    ];
+
+    // Add trustedNodeIp if available
+    if (trustedNodeIp) {
+      FullNodePeer.prioritizedPeers.unshift(trustedNodeIp);
+    }
+
+    // Prioritize trustedNodeIp
     if (
       trustedNodeIp &&
-      !FullNodePeer.deprioritizedIps.has(trustedNodeIp) &&
+      !FullNodePeer.cooldownCache.has(trustedNodeIp) &&
       (await FullNodePeer.isPortReachable(trustedNodeIp, FULLNODE_PORT))
     ) {
       priorityIps.push(trustedNodeIp);
     }
 
-    // Prioritize LOCALHOST unless it's deprioritized
+    // Prioritize LOCALHOST
     if (
-      !FullNodePeer.deprioritizedIps.has(LOCALHOST) &&
+      !FullNodePeer.cooldownCache.has(LOCALHOST) &&
       (await FullNodePeer.isPortReachable(LOCALHOST, FULLNODE_PORT))
     ) {
       priorityIps.push(LOCALHOST);
     }
 
-    // Prioritize CHIA_NODES_HOST unless it's deprioritized
+    // Prioritize CHIA_NODES_HOST
     if (
-      !FullNodePeer.deprioritizedIps.has(CHIA_NODES_HOST) &&
+      !FullNodePeer.cooldownCache.has(CHIA_NODES_HOST) &&
       (await FullNodePeer.isPortReachable(CHIA_NODES_HOST, FULLNODE_PORT))
     ) {
       priorityIps.push(CHIA_NODES_HOST);
@@ -113,23 +203,33 @@ export class FullNodePeer {
       return priorityIps;
     }
 
+    // Check if cached peer IPs exist
+    const cachedPeerIPs = FullNodePeer.peerIPCache.get<string[]>("peerIPs");
+    if (cachedPeerIPs) {
+      return cachedPeerIPs;
+    }
+
     // Fetch peers from DNS introducers
+    const fetchedPeers: string[] = [];
     for (const DNS_HOST of DNS_HOSTS) {
       try {
         const ips = await resolve4(DNS_HOST);
         if (ips && ips.length > 0) {
-          const shuffledIps = ips.sort(() => 0.5 - Math.random());
+          const shuffledIps = FullNodePeer.shuffleArray(ips);
           const reachableIps: string[] = [];
 
           for (const ip of shuffledIps) {
-            if (await FullNodePeer.isPortReachable(ip, FULLNODE_PORT)) {
+            if (
+              !FullNodePeer.cooldownCache.has(ip) &&
+              (await FullNodePeer.isPortReachable(ip, FULLNODE_PORT))
+            ) {
               reachableIps.push(ip);
             }
-            if (reachableIps.length === 5) break;
+            if (reachableIps.length === MAX_PEERS_TO_FETCH) break; // Limit to MAX_PEERS_TO_FETCH peers
           }
 
           if (reachableIps.length > 0) {
-            return reachableIps;
+            fetchedPeers.push(...reachableIps);
           }
         }
       } catch (error: any) {
@@ -138,96 +238,105 @@ export class FullNodePeer {
         );
       }
     }
+
+    // Cache the fetched peer IPs
+    if (fetchedPeers.length > 0) {
+      FullNodePeer.peerIPCache.set("peerIPs", fetchedPeers);
+      return fetchedPeers;
+    }
+
     throw new Error("No reachable IPs found in any DNS records.");
   }
 
+  /**
+   * Shuffles an array using the Fisher-Yates algorithm.
+   * @param {T[]} array - The array to shuffle.
+   * @returns {T[]} The shuffled array.
+   */
+  private static shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  /**
+   * Initializes the peer weights map.
+   * Assigns higher initial weights to prioritized peers.
+   * @param {string[]} peerIPs - An array of peer IPs.
+   */
+  private static initializePeerWeights(peerIPs: string[]): void {
+    for (const ip of peerIPs) {
+      if (!FullNodePeer.peerWeights.has(ip)) {
+        if (
+          ip === CHIA_NODES_HOST ||
+          ip === LOCALHOST ||
+          ip === FullNodePeer.getTrustedFullNode()
+        ) {
+          FullNodePeer.peerWeights.set(ip, 5); // Higher weight for prioritized peers
+        } else {
+          FullNodePeer.peerWeights.set(ip, 1); // Default weight
+        }
+      }
+    }
+  }
+
+  /**
+   * Selects a peer based on weighted random selection.
+   * Prioritized peers have higher weights.
+   * @returns {string} The selected peer IP.
+   */
+  private static selectPeerByWeight(): string {
+    const peers = Array.from(FullNodePeer.peerWeights.entries())
+      .filter(([ip, _]) => !FullNodePeer.cooldownCache.has(ip))
+      .map(([ip, weight]) => ({ ip, weight }));
+
+    const totalWeight = peers.reduce((sum, peer) => sum + peer.weight, 0);
+    if (totalWeight === 0) {
+      throw new Error("All peers are in cooldown.");
+    }
+
+    const random = Math.random() * totalWeight;
+    let cumulative = 0;
+
+    for (const peer of peers) {
+      cumulative += peer.weight;
+      if (random < cumulative) {
+        return peer.ip;
+      }
+    }
+
+    // Fallback
+    return peers[peers.length - 1].ip;
+  }
+
+  /**
+   * Retrieves all reachable peer IPs, excluding those in cooldown.
+   * @returns {Promise<string[]>} An array of reachable peer IPs.
+   */
   private static async getPeerIPs(): Promise<string[]> {
-    const ips = await FullNodePeer.memoizedFetchNewPeerIPs();
-
-    const reachableIps = await Promise.all(
-      ips.map(async (ip) => {
-        if (ip && (await FullNodePeer.isPortReachable(ip, FULLNODE_PORT))) {
-          return ip;
-        }
-        return null;
-      })
-    ).then((results) => results.filter((ip) => ip !== null) as string[]);
-
-    if (reachableIps.length > 0) {
-      return reachableIps;
-    }
-
-    // @ts-ignore
-    if (FullNodePeer.memoizedFetchNewPeerIPs?.cache?.clear) {
-      // Clear cache and reset deprioritized IPs when cache is cleared
-      FullNodePeer.deprioritizedIps.clear();
-      // @ts-ignore
-      FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
-    }
-
-    return FullNodePeer.memoizedFetchNewPeerIPs();
+    const peerIPs = await FullNodePeer.fetchNewPeerIPs();
+    return peerIPs;
   }
 
-  private static createPeerProxy(peer: Peer): Peer {
-    return new Proxy(peer, {
-      get: (target, prop) => {
-        const originalMethod = (target as any)[prop];
-
-        if (typeof originalMethod === "function") {
-          return async (...args: any[]) => {
-            let timeoutId: NodeJS.Timeout | undefined;
-
-            // Start the timeout to forget the peer after 1 minute
-            const timeoutPromise = new Promise<null>((_, reject) => {
-              timeoutId = setTimeout(() => {
-                FullNodePeer.cachedPeer = null;
-                reject(
-                  new Error("Operation timed out. Reconnecting to a new peer.")
-                );
-              }, 60000); // 1 minute
-            });
-
-            try {
-              // Run the original method and race it against the timeout
-              const result = await Promise.race([
-                originalMethod.apply(target, args),
-                timeoutPromise,
-              ]);
-
-              // Clear the timeout if the operation succeeded
-              if (timeoutId) {
-                clearTimeout(timeoutId);
-              }
-
-              return result;
-            } catch (error: any) {
-              // If the error is WebSocket-related or timeout, reset the peer
-              if (
-                error.message.includes("WebSocket") ||
-                error.message.includes("Operation timed out")
-              ) {
-                FullNodePeer.cachedPeer = null;
-                // @ts-ignore
-                FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
-                FullNodePeer.deprioritizedIps.clear();
-                console.info(
-                  `Fullnode Peer error, reconnecting to a new peer...`
-                );
-                const newPeer = await FullNodePeer.getBestPeer();
-                return (newPeer as any)[prop](...args);
-              }
-              throw error;
-            }
-          };
-        }
-        return originalMethod;
-      },
-    });
+  /**
+   * Initializes the peer weights based on prioritization and reliability.
+   * @param {string[]} peerIPs - An array of peer IPs.
+   */
+  private static setupPeers(peerIPs: string[]): void {
+    FullNodePeer.initializePeerWeights(peerIPs);
   }
 
+  /**
+   * Connects to the best available peer based on weighted selection and reliability.
+   * @returns {Promise<Peer>} The connected Peer instance.
+   */
   private static async getBestPeer(): Promise<Peer> {
     const now = Date.now();
 
+    // Refresh cachedPeer if expired
     if (
       FullNodePeer.cachedPeer &&
       now - FullNodePeer.cachedPeer.timestamp < CACHE_DURATION
@@ -235,6 +344,21 @@ export class FullNodePeer {
       return FullNodePeer.cachedPeer.peer;
     }
 
+    // Fetch peer IPs
+    const peerIPs = await FullNodePeer.getPeerIPs();
+
+    // Setup peer weights with prioritization
+    FullNodePeer.setupPeers(peerIPs);
+
+    // Weighted random selection
+    let selectedPeerIP: string;
+    try {
+      selectedPeerIP = FullNodePeer.selectPeerByWeight();
+    } catch (error: any) {
+      throw new Error(`Failed to select a peer: ${error.message}`);
+    }
+
+    // Attempt to create a peer connection
     const sslFolder = path.resolve(os.homedir(), ".dig", "ssl");
     const certFile = path.join(sslFolder, "public_dig.crt");
     const keyFile = path.join(sslFolder, "public_dig.key");
@@ -245,116 +369,165 @@ export class FullNodePeer {
 
     const tls = new Tls(certFile, keyFile);
 
-    const peerIPs = await FullNodePeer.getPeerIPs();
-    const trustedNodeIp = Environment.TRUSTED_FULLNODE || null;
-
-    const peers = await Promise.all(
-      peerIPs.map(async (ip) => {
-        if (ip) {
-          // Allow override of the trusted fullnode port if the override exists
-          let port = FULLNODE_PORT;
-          if (trustedNodeIp && ip === trustedNodeIp) {
-            const trustedFullNodePort = Environment.TRUSTED_FULLNODE_PORT;
-            if (trustedFullNodePort) {
-              port = trustedFullNodePort;
-            }
-          }
-          try {
-            const peer = await Peer.new(`${ip}:${port}`, false, tls);
-            return FullNodePeer.createPeerProxy(peer);
-          } catch (error: any) {
-            console.error(
-              `Failed to create peer for IP ${ip}: ${error.message}`
-            );
-            return null;
-          }
-        }
-        return null;
-      })
-    ).then((results) => results.filter((peer) => peer !== null) as Peer[]);
-
-    if (peers.length === 0) {
-      throw new Error("No peers available, please try again.");
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const peakHeights = await Promise.all(
-      peers.map((peer) =>
-        peer
-          .getPeak()
-          .then((height) => height)
-          .catch((error) => {
-            console.error(`Failed to get peak for peer: ${error.message}`);
-            return null;
-          })
-      )
-    );
-
-    const validHeights = peakHeights.filter(
-      (height) => height !== null
-    ) as number[];
-
-    if (validHeights.length === 0) {
-      throw new Error("No valid peak heights obtained from any peer.");
-    }
-
-    const highestPeak = Math.max(...validHeights);
-
-    // Prioritize LOCALHOST, TRUSTED_NODE_IP, and CHIA_NODES_HOST if they have the highest peak height
-    let bestPeerIndex = validHeights.findIndex(
-      (height, index) =>
-        height === highestPeak &&
-        !FullNodePeer.deprioritizedIps.has(peerIPs[index]) && // Exclude deprioritized IPs
-        (peerIPs[index] === LOCALHOST ||
-          peerIPs[index] === trustedNodeIp ||
-          peerIPs[index] === CHIA_NODES_HOST)
-    );
-
-    // If LOCALHOST, TRUSTED_NODE_IP, or CHIA_NODES_HOST don't have the highest peak, select any peer with the highest peak
-    if (bestPeerIndex === -1) {
-      bestPeerIndex = validHeights.findIndex(
-        (height) => height === highestPeak
-      );
-    }
-
-    const bestPeer = peers[bestPeerIndex];
-
-    FullNodePeer.cachedPeer = { peer: bestPeer, timestamp: now };
-
-    console.log(`Using Fullnode Peer: ${peerIPs[bestPeerIndex]}`);
-
-    return bestPeer;
-  }
-
-  public getPeer(): Peer {
-    return this.peer;
-  }
-
-  public static async waitForConfirmation(
-    parentCoinInfo: Buffer
-  ): Promise<boolean> {
-    const spinner = createSpinner("Waiting for confirmation...").start();
-    const peer = await FullNodePeer.connect();
-
+    let peer: Peer;
     try {
-      while (true) {
-        const confirmed = await peer.isCoinSpent(
-          parentCoinInfo,
-          MIN_HEIGHT,
-          Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-        );
-
-        if (confirmed) {
-          spinner.success({ text: "Coin confirmed!" });
-          return true;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-      }
+      peer = await Peer.new(`${selectedPeerIP}:${FULLNODE_PORT}`, false, tls);
     } catch (error: any) {
-      spinner.error({ text: "Error while waiting for confirmation." });
-      throw error;
+      console.error(
+        `Failed to create peer for IP ${selectedPeerIP}: ${error.message}`
+      );
+      // Add to cooldown
+      FullNodePeer.cooldownCache.set(selectedPeerIP, true);
+      // Decrease weight or remove peer
+      const currentWeight = FullNodePeer.peerWeights.get(selectedPeerIP) || 1;
+      if (currentWeight > 1) {
+        FullNodePeer.peerWeights.set(selectedPeerIP, currentWeight - 1);
+      } else {
+        FullNodePeer.peerWeights.delete(selectedPeerIP);
+      }
+      throw new Error(`Unable to connect to peer ${selectedPeerIP}`);
     }
+
+    // Wrap the peer with proxy to handle errors and retries
+    const proxiedPeer = FullNodePeer.createPeerProxy(peer, selectedPeerIP);
+
+    // Store PeerInfo
+    FullNodePeer.peerInfos.set(selectedPeerIP, {
+      peer: proxiedPeer,
+      weight: FullNodePeer.peerWeights.get(selectedPeerIP) || 1,
+      address: selectedPeerIP,
+    });
+
+    // Cache the peer
+    FullNodePeer.cachedPeer = { peer: proxiedPeer, timestamp: now };
+
+    console.log(`Using Fullnode Peer: ${selectedPeerIP}`);
+
+    return proxiedPeer;
   }
+
+  /**
+   * Creates a proxy for the peer to handle errors and implement retries.
+   * @param {Peer} peer - The Peer instance.
+   * @param {string} peerIP - The IP address of the peer.
+   * @param {number} [retryCount=0] - The current retry attempt.
+   * @returns {Peer} The proxied Peer instance.
+   */
+  private static createPeerProxy(peer: Peer, peerIP: string, retryCount: number = 0): Peer {
+    return new Proxy(peer, {
+      get: (target, prop) => {
+        const originalMethod = (target as any)[prop];
+
+        if (typeof originalMethod === "function") {
+          return async (...args: any[]) => {
+            try {
+              const result = await originalMethod.apply(target, args);
+              // On successful operation, increase the weight slightly
+              const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
+              FullNodePeer.peerWeights.set(peerIP, currentWeight + 0.1); // Increment weight
+              return result;
+            } catch (error: any) {
+              console.error(`Peer ${peerIP} encountered an error: ${error.message}`);
+
+              // Check if the error is related to WebSocket or Operation timed out
+              if (
+                error.message.includes("WebSocket") ||
+                error.message.includes("Operation timed out")
+              ) {
+                // Add the faulty peer to the cooldown cache
+                FullNodePeer.cooldownCache.set(peerIP, true);
+
+                // Decrease weight or remove peer
+                const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
+                if (currentWeight > 1) {
+                  FullNodePeer.peerWeights.set(peerIP, currentWeight - 1);
+                } else {
+                  FullNodePeer.peerWeights.delete(peerIP);
+                }
+
+                // If maximum retries reached, throw the error
+                if (retryCount >= MAX_RETRIES) {
+                  console.error(`Max retries reached for method ${String(prop)} on peer ${peerIP}.`);
+                  throw error;
+                }
+
+                // Attempt to select a new peer and retry the method
+                try {
+                  console.info(`Selecting a new peer to retry method ${String(prop)}...`);
+                  const newPeer = await FullNodePeer.getBestPeer();
+
+                  // Extract new peer's IP address
+                  const newPeerIP = FullNodePeer.extractPeerIP(newPeer);
+
+                  if (!newPeerIP) {
+                    throw new Error("Unable to extract IP from the new peer.");
+                  }
+
+                  // Wrap the new peer with a proxy, incrementing the retry count
+                  const proxiedNewPeer = FullNodePeer.createPeerProxy(newPeer, newPeerIP, retryCount + 1);
+
+                  // Retry the method on the new peer
+                  return await (proxiedNewPeer as any)[prop](...args);
+                } catch (retryError: any) {
+                  console.error(`Retry failed on a new peer: ${retryError.message}`);
+                  throw retryError;
+                }
+              } else {
+                // For other errors, handle normally
+                throw error;
+              }
+            }
+          };
+        }
+        return originalMethod;
+      },
+    });
+  }
+
+  /**
+   * Extracts the IP address from a Peer instance.
+   * @param {Peer} peer - The Peer instance.
+   * @returns {string | null} The extracted IP address or null if not found.
+   */
+  private static extractPeerIP(peer: Peer): string | null {
+    for (const [ip, info] of FullNodePeer.peerInfos.entries()) {
+      if (info.peer === peer) {
+        return ip;
+      }
+    }
+    return null;
+  }
+
+    /**
+   * Waits for a coin to be confirmed (spent) on the blockchain.
+   * @param {Buffer} parentCoinInfo - The parent coin information.
+   * @returns {Promise<boolean>} Whether the coin was confirmed.
+   */
+    public static async waitForConfirmation(
+      parentCoinInfo: Buffer
+    ): Promise<boolean> {
+      const spinner = createSpinner("Waiting for confirmation...").start();
+      const peer = await FullNodePeer.connect();
+  
+      try {
+        while (true) {
+          const confirmed = await peer.isCoinSpent(
+            parentCoinInfo,
+            MIN_HEIGHT,
+            Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+          );
+  
+          if (confirmed) {
+            spinner.success({ text: "Coin confirmed!" });
+            return true;
+          }
+  
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+      } catch (error: any) {
+        spinner.error({ text: "Error while waiting for confirmation." });
+        console.error(`waitForConfirmation error: ${error.message}`);
+        throw error;
+      }
+    }
 }
