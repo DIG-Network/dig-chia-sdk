@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.127](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.126...v0.0.1-alpha.127) (2024-10-04)
+
+
+### Features
+
+* upgraded fullnode peer logic ([25a3588](https://github.com/DIG-Network/dig-chia-sdk/commit/25a3588e3a6c3ce6dddf90401cc59a1d56f114fa))
+
 ### [0.0.1-alpha.126](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.125...v0.0.1-alpha.126) (2024-10-04)
 
 
