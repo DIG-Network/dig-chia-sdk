@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.129](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.128...v0.0.1-alpha.129) (2024-10-04)
+
+
+### Features
+
+* add ping network on update ([c7ebc6f](https://github.com/DIG-Network/dig-chia-sdk/commit/c7ebc6fc4ff04c880d0363d9079bca09256d789a))
+
 ### [0.0.1-alpha.128](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.127...v0.0.1-alpha.128) (2024-10-04)
 
 
