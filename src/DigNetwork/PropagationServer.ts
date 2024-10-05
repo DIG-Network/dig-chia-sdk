@@ -118,8 +118,6 @@ export class PropagationServer {
    * @param rootHash - The root hash for the store update.
    */
   async pingUpdate(rootHash: string): Promise<void> {
-    const spinner = createSpinner(`Pinging peer ${this.ipAddress}...`).start();
-
     try {
       const httpsAgent = this.createHttpsAgent();
       const url = `https://${formatHost(this.ipAddress)}:${
@@ -130,6 +128,10 @@ export class PropagationServer {
         httpsAgent,
         headers: {
           "Content-Type": "application/json",
+        },
+        validateStatus: (status) => {
+          // Accept all status codes to handle them manually
+          return true;
         },
       };
 
@@ -142,20 +144,53 @@ export class PropagationServer {
 
       try {
         const response = await axios.post(url, data, config);
-        console.log(green(`✔ Successfully pinged peer: ${this.ipAddress}`));
-        spinner.success({
-          text: green(
-            `✔ Successfully pinged peer ${this.ipAddress} with rootHash ${rootHash}`
-          ),
-        });
-        return response.data;
+
+        if (response.status === 200) {
+          console.log(green(`✔ Peer was up to date: ${this.ipAddress}`));
+          return;
+        } else if (
+          response.status === 400 &&
+          response.data?.error?.includes("does not exist")
+        ) {
+          console.log(
+            yellow(
+              `⚠ Peer ${this.ipAddress} does not have store ${this.storeId}. Notifying for update.`
+            )
+          );
+          // You can implement additional logic here if needed, such as retrying or logging
+          return;
+        } else {
+          console.error(
+            red(
+              `✖ Unexpected response from peer ${this.ipAddress}: ${response.status} ${response.statusText}`
+            )
+          );
+          throw new Error(
+            `Unexpected response: ${response.status} ${response.statusText}`
+          );
+        }
       } catch (error: any) {
+        if (error.response) {
+          // Server responded with a status other than 2xx
+          if (
+            error.response.status === 400 &&
+            error.response.data?.error?.includes("does not exist")
+          ) {
+            console.log(
+              yellow(
+                `⚠ Peer ${this.ipAddress} does not have store ${this.storeId}. Notifying for update.`
+              )
+            );
+            // You can implement additional logic here if needed
+            return;
+          }
+        }
+
         console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
         console.error(red(error.message));
         throw error;
       }
     } catch (error: any) {
-      spinner.error({ text: red("✖ Error pinging network peer.") });
       console.error(red(error.message));
     }
   }
