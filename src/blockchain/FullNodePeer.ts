@@ -175,7 +175,7 @@ export class FullNodePeer {
 
     // Define prioritized peers
     FullNodePeer.prioritizedPeers = [
-      ...DNS_HOSTS, // Assuming CHIA_NODES_HOST is included in DNS_HOSTS
+      CHIA_NODES_HOST,
       LOCALHOST,
     ];
 
