@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.140](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.139...v0.0.1-alpha.140) (2024-10-05)
+
 ### [0.0.1-alpha.139](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.138...v0.0.1-alpha.139) (2024-10-05)
 
 ### [0.0.1-alpha.138](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.137...v0.0.1-alpha.138) (2024-10-05)
