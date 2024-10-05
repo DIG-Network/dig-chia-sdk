@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.135](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.134...v0.0.1-alpha.135) (2024-10-05)
+
+
+### Features
+
+* bottleneck fullnode requests to 100 requests per min ([85c7529](https://github.com/DIG-Network/dig-chia-sdk/commit/85c7529acf36b1df6c1dff127d9a8c6770abb3f0))
+
+
+### Bug Fixes
+
+* ping peer message ([a18ccae](https://github.com/DIG-Network/dig-chia-sdk/commit/a18ccae01f1685e7ebc73381599e77b334e9e7d5))
+
 ### [0.0.1-alpha.134](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.133...v0.0.1-alpha.134) (2024-10-05)
 
 
