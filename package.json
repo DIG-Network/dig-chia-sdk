@@ -30,6 +30,7 @@
     "archiver": "^7.0.1",
     "axios": "^1.7.7",
     "bip39": "^3.1.0",
+    "bottleneck": "^2.19.5",
     "chia-bls": "^1.0.2",
     "chia-config-loader": "^1.0.1",
     "chia-root-resolver": "^1.0.0",

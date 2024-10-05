@@ -8,6 +8,7 @@ import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { Environment } from "../utils/Environment";
 import NodeCache from "node-cache";
+import Bottleneck from "bottleneck";
 
 // Constants
 const FULLNODE_PORT = 8444;
@@ -21,9 +22,10 @@ const DNS_HOSTS = [
 ];
 const CONNECTION_TIMEOUT = 2000; // in milliseconds
 const CACHE_DURATION = 30000; // in milliseconds
-const COOLDOWN_DURATION = 60000; // in milliseconds
+const COOLDOWN_DURATION = 300000; // 5 minutes in milliseconds
 const MAX_PEERS_TO_FETCH = 5; // Maximum number of peers to fetch from DNS
 const MAX_RETRIES = 3; // Maximum number of retry attempts
+const MAX_REQUESTS_PER_MINUTE = 100; // Throttle limit
 
 /**
  * Represents a peer with its reliability weight and address.
@@ -33,6 +35,15 @@ interface PeerInfo {
   weight: number;
   address: string;
   isConnected: boolean; // Indicates if the peer is currently connected
+}
+
+/**
+ * Represents a queued method call.
+ */
+interface QueuedCall {
+  execute: () => Promise<any>;
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
 }
 
 /**
@@ -59,6 +70,12 @@ export class FullNodePeer {
 
   // Cache for fetched peer IPs
   private static peerIPCache = new NodeCache({ stdTTL: CACHE_DURATION / 1000 });
+
+  // Bottleneck instance for global throttling
+  private static limiter = new Bottleneck({
+    maxConcurrent: 1, // Ensures only one request is processed at a time
+    minTime: 60000 / MAX_REQUESTS_PER_MINUTE, // Calculated delay between requests
+  });
 
   // Private constructor for singleton pattern
   private constructor(private peer: Peer) {}
@@ -410,7 +427,7 @@ export class FullNodePeer {
   }
 
   /**
-   * Creates a proxy for the peer to handle errors and implement retries.
+   * Creates a proxy for the peer to handle errors, implement retries, and enforce throttling.
    * @param {Peer} peer - The Peer instance.
    * @param {string} peerIP - The IP address of the peer.
    * @param {number} [retryCount=0] - The current retry attempt.
@@ -437,61 +454,64 @@ export class FullNodePeer {
         const originalMethod = (target as any)[prop];
 
         if (typeof originalMethod === "function") {
-          return async (...args: any[]) => {
-            const peerInfo = FullNodePeer.peerInfos.get(peerIP);
-            if (!peerInfo || !peerInfo.isConnected) {
-              throw new Error(`Cannot perform operation: Peer ${peerIP} is disconnected.`);
-            }
+          return (...args: any[]) => {
+            // Wrap the method call with Bottleneck's scheduling
+            return FullNodePeer.limiter.schedule(async () => {
+              const peerInfo = FullNodePeer.peerInfos.get(peerIP);
+              if (!peerInfo || !peerInfo.isConnected) {
+                throw new Error(`Cannot perform operation: Peer ${peerIP} is disconnected.`);
+              }
 
-            try {
-              const result = await originalMethod.apply(target, args);
-              // On successful operation, increase the weight slightly
-              const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
-              FullNodePeer.peerWeights.set(peerIP, currentWeight + 0.1); // Increment weight
-              return result;
-            } catch (error: any) {
-              console.error(`Peer ${peerIP} encountered an error: ${error.message}`);
+              try {
+                const result = await originalMethod.apply(target, args);
+                // On successful operation, increase the weight slightly
+                const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
+                FullNodePeer.peerWeights.set(peerIP, currentWeight + 0.1); // Increment weight
+                return result;
+              } catch (error: any) {
+                console.error(`Peer ${peerIP} encountered an error: ${error.message}`);
 
-              // Check if the error is related to WebSocket or Operation timed out
-              if (
-                error.message.includes("WebSocket") ||
-                error.message.includes("Operation timed out")
-              ) {
-                // Handle the disconnection and mark the peer accordingly
-                FullNodePeer.handlePeerDisconnection(peerIP);
+                // Check if the error is related to WebSocket or Operation timed out
+                if (
+                  error.message.includes("WebSocket") ||
+                  error.message.includes("Operation timed out")
+                ) {
+                  // Handle the disconnection and mark the peer accordingly
+                  FullNodePeer.handlePeerDisconnection(peerIP);
 
-                // If maximum retries reached, throw the error
-                if (retryCount >= MAX_RETRIES) {
-                  console.error(`Max retries reached for method ${String(prop)} on peer ${peerIP}.`);
-                  throw error;
-                }
-
-                // Attempt to select a new peer and retry the method
-                try {
-                  console.info(`Selecting a new peer to retry method ${String(prop)}...`);
-                  const newPeer = await FullNodePeer.getBestPeer();
-
-                  // Extract new peer's IP address
-                  const newPeerIP = FullNodePeer.extractPeerIP(newPeer);
-
-                  if (!newPeerIP) {
-                    throw new Error("Unable to extract IP from the new peer.");
+                  // If maximum retries reached, throw the error
+                  if (retryCount >= MAX_RETRIES) {
+                    console.error(`Max retries reached for method ${String(prop)} on peer ${peerIP}.`);
+                    throw error;
                   }
 
-                  // Wrap the new peer with a proxy, incrementing the retry count
-                  const proxiedNewPeer = FullNodePeer.createPeerProxy(newPeer, newPeerIP, retryCount + 1);
+                  // Attempt to select a new peer and retry the method
+                  try {
+                    console.info(`Selecting a new peer to retry method ${String(prop)}...`);
+                    const newPeer = await FullNodePeer.getBestPeer();
 
-                  // Retry the method on the new peer
-                  return await (proxiedNewPeer as any)[prop](...args);
-                } catch (retryError: any) {
-                  console.error(`Retry failed on a new peer: ${retryError.message}`);
-                  throw retryError;
+                    // Extract new peer's IP address
+                    const newPeerIP = FullNodePeer.extractPeerIP(newPeer);
+
+                    if (!newPeerIP) {
+                      throw new Error("Unable to extract IP from the new peer.");
+                    }
+
+                    // Wrap the new peer with a proxy, incrementing the retry count
+                    const proxiedNewPeer = FullNodePeer.createPeerProxy(newPeer, newPeerIP, retryCount + 1);
+
+                    // Retry the method on the new peer
+                    return await (proxiedNewPeer as any)[prop](...args);
+                  } catch (retryError: any) {
+                    console.error(`Retry failed on a new peer: ${retryError.message}`);
+                    throw retryError;
+                  }
+                } else {
+                  // For other errors, handle normally
+                  throw error;
                 }
-              } else {
-                // For other errors, handle normally
-                throw error;
               }
-            }
+            });
           };
         }
         return originalMethod;
@@ -577,12 +597,21 @@ export class FullNodePeer {
           return true;
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await FullNodePeer.delay(5000);
       }
     } catch (error: any) {
       spinner.error({ text: "Error while waiting for confirmation." });
       console.error(`waitForConfirmation error: ${error.message}`);
       throw error;
     }
+  }
+
+  /**
+   * Delays execution for a specified amount of time.
+   * @param {number} ms - Milliseconds to delay.
+   * @returns {Promise<void>} A promise that resolves after the delay.
+   */
+  private static delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
