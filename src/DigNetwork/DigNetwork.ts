@@ -10,7 +10,7 @@ export class DigNetwork {
   private serverCoin: ServerCoin;
   private storeDir: string;
   private peerBlacklist: Map<string, Set<string>>; // Map of file keys to blacklists
-  private networkSyncActive: boolean = false;
+  private static networkSyncMap: Map<string, boolean> = new Map();
 
   constructor(storeId: string) {
     this.dataStore = DataStore.from(storeId);
@@ -138,8 +138,12 @@ export class DigNetwork {
     prioritizedPeer?: DigPeer,
     maxRootsToProcess?: number
   ): Promise<void> {
-    console.log("Starting file download process...");
-    this.networkSyncActive = true;
+    // Check if synchronization is already active for this storeId
+    if (DigNetwork.networkSyncMap.get(this.dataStore.StoreId)) {
+      return;
+    }
+    console.log("Starting network sync for store:", this.dataStore.StoreId);
+    DigNetwork.networkSyncMap.set(this.dataStore.StoreId, true);
     let peerBlackList: string[] = [];
 
     try {
@@ -236,7 +240,9 @@ export class DigNetwork {
       console.error("Error during syncing store from peers:", error);
       throw error;
     } finally {
-      this.networkSyncActive = false;
+      // Mark synchronization as inactive for this storeId
+      DigNetwork.networkSyncMap.set(this.dataStore.StoreId, false);
+      console.log(`Network sync for storeId: ${this.dataStore.StoreId} has completed.`);
     }
   }
 
