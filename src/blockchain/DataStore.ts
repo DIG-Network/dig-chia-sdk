@@ -298,13 +298,13 @@ export class DataStore {
 
   public static getAllStores(): DataStore[] {
     const storeFolders = fs.readdirSync(STORE_PATH);
-    const storIds = storeFolders.filter(
+    const storeIds = storeFolders.filter(
       (folder) =>
         /^[a-f0-9]{64}$/.test(folder) &&
         fs.lstatSync(path.join(STORE_PATH, folder)).isDirectory()
     );
 
-    return storIds.map((storeId) => DataStore.from(storeId));
+    return storeIds.map((storeId) => DataStore.from(storeId));
   }
 
   /**

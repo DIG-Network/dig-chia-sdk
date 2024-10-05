@@ -32,6 +32,7 @@ interface PeerInfo {
   peer: Peer;
   weight: number;
   address: string;
+  isConnected: boolean; // Indicates if the peer is currently connected
 }
 
 /**
@@ -336,10 +337,11 @@ export class FullNodePeer {
   private static async getBestPeer(): Promise<Peer> {
     const now = Date.now();
 
-    // Refresh cachedPeer if expired
+    // Refresh cachedPeer if expired or disconnected
     if (
       FullNodePeer.cachedPeer &&
-      now - FullNodePeer.cachedPeer.timestamp < CACHE_DURATION
+      now - FullNodePeer.cachedPeer.timestamp < CACHE_DURATION &&
+      FullNodePeer.peerInfos.get(FullNodePeer.extractPeerIP(FullNodePeer.cachedPeer.peer) || "")?.isConnected
     ) {
       return FullNodePeer.cachedPeer.peer;
     }
@@ -396,6 +398,7 @@ export class FullNodePeer {
       peer: proxiedPeer,
       weight: FullNodePeer.peerWeights.get(selectedPeerIP) || 1,
       address: selectedPeerIP,
+      isConnected: true, // Mark as connected
     });
 
     // Cache the peer
@@ -414,12 +417,32 @@ export class FullNodePeer {
    * @returns {Peer} The proxied Peer instance.
    */
   private static createPeerProxy(peer: Peer, peerIP: string, retryCount: number = 0): Peer {
+    // Listen for close events if the Peer class supports it
+    // This assumes that the Peer class emits a 'close' event when the connection is closed
+    // Adjust accordingly based on the actual Peer implementation
+    if (typeof (peer as any).on === "function") {
+      (peer as any).on("close", () => {
+        console.warn(`Peer ${peerIP} connection closed.`);
+        FullNodePeer.handlePeerDisconnection(peerIP);
+      });
+
+      (peer as any).on("error", (error: any) => {
+        console.error(`Peer ${peerIP} encountered an error: ${error.message}`);
+        FullNodePeer.handlePeerDisconnection(peerIP);
+      });
+    }
+
     return new Proxy(peer, {
       get: (target, prop) => {
         const originalMethod = (target as any)[prop];
 
         if (typeof originalMethod === "function") {
           return async (...args: any[]) => {
+            const peerInfo = FullNodePeer.peerInfos.get(peerIP);
+            if (!peerInfo || !peerInfo.isConnected) {
+              throw new Error(`Cannot perform operation: Peer ${peerIP} is disconnected.`);
+            }
+
             try {
               const result = await originalMethod.apply(target, args);
               // On successful operation, increase the weight slightly
@@ -434,16 +457,8 @@ export class FullNodePeer {
                 error.message.includes("WebSocket") ||
                 error.message.includes("Operation timed out")
               ) {
-                // Add the faulty peer to the cooldown cache
-                FullNodePeer.cooldownCache.set(peerIP, true);
-
-                // Decrease weight or remove peer
-                const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
-                if (currentWeight > 1) {
-                  FullNodePeer.peerWeights.set(peerIP, currentWeight - 1);
-                } else {
-                  FullNodePeer.peerWeights.delete(peerIP);
-                }
+                // Handle the disconnection and mark the peer accordingly
+                FullNodePeer.handlePeerDisconnection(peerIP);
 
                 // If maximum retries reached, throw the error
                 if (retryCount >= MAX_RETRIES) {
@@ -485,6 +500,38 @@ export class FullNodePeer {
   }
 
   /**
+   * Handles peer disconnection by marking it in cooldown and updating internal states.
+   * @param {string} peerIP - The IP address of the disconnected peer.
+   */
+  private static handlePeerDisconnection(peerIP: string): void {
+    // Mark the peer in cooldown
+    FullNodePeer.cooldownCache.set(peerIP, true);
+
+    // Decrease weight or remove peer
+    const currentWeight = FullNodePeer.peerWeights.get(peerIP) || 1;
+    if (currentWeight > 1) {
+      FullNodePeer.peerWeights.set(peerIP, currentWeight - 1);
+    } else {
+      FullNodePeer.peerWeights.delete(peerIP);
+    }
+
+    // Update the peer's connection status
+    const peerInfo = FullNodePeer.peerInfos.get(peerIP);
+    if (peerInfo) {
+      peerInfo.isConnected = false;
+      FullNodePeer.peerInfos.set(peerIP, peerInfo);
+    }
+
+    // If the disconnected peer was the cached peer, invalidate the cache
+    if (
+      FullNodePeer.cachedPeer &&
+      FullNodePeer.extractPeerIP(FullNodePeer.cachedPeer.peer) === peerIP
+    ) {
+      FullNodePeer.cachedPeer = null;
+    }
+  }
+
+  /**
    * Extracts the IP address from a Peer instance.
    * @param {Peer} peer - The Peer instance.
    * @returns {string | null} The extracted IP address or null if not found.
@@ -498,36 +545,44 @@ export class FullNodePeer {
     return null;
   }
 
-    /**
+  /**
    * Waits for a coin to be confirmed (spent) on the blockchain.
    * @param {Buffer} parentCoinInfo - The parent coin information.
    * @returns {Promise<boolean>} Whether the coin was confirmed.
    */
-    public static async waitForConfirmation(
-      parentCoinInfo: Buffer
-    ): Promise<boolean> {
-      const spinner = createSpinner("Waiting for confirmation...").start();
-      const peer = await FullNodePeer.connect();
-  
-      try {
-        while (true) {
-          const confirmed = await peer.isCoinSpent(
-            parentCoinInfo,
-            MIN_HEIGHT,
-            Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-          );
-  
-          if (confirmed) {
-            spinner.success({ text: "Coin confirmed!" });
-            return true;
-          }
-  
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-        }
-      } catch (error: any) {
-        spinner.error({ text: "Error while waiting for confirmation." });
-        console.error(`waitForConfirmation error: ${error.message}`);
-        throw error;
-      }
+  public static async waitForConfirmation(
+    parentCoinInfo: Buffer
+  ): Promise<boolean> {
+    const spinner = createSpinner("Waiting for confirmation...").start();
+    let peer: Peer;
+
+    try {
+      peer = await FullNodePeer.connect();
+    } catch (error: any) {
+      spinner.error({ text: "Failed to connect to a peer." });
+      console.error(`waitForConfirmation connection error: ${error.message}`);
+      throw error;
     }
+
+    try {
+      while (true) {
+        const confirmed = await peer.isCoinSpent(
+          parentCoinInfo,
+          MIN_HEIGHT,
+          Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+        );
+
+        if (confirmed) {
+          spinner.success({ text: "Coin confirmed!" });
+          return true;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    } catch (error: any) {
+      spinner.error({ text: "Error while waiting for confirmation." });
+      console.error(`waitForConfirmation error: ${error.message}`);
+      throw error;
+    }
+  }
 }
