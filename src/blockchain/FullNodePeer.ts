@@ -602,14 +602,14 @@ export class FullNodePeer {
    * @param {Buffer} parentCoinInfo - The parent coin information.
    * @returns {Promise<boolean>} Whether the coin was confirmed.
    */
-  public async waitForConfirmation(
+  public static async waitForConfirmation(
     parentCoinInfo: Buffer
   ): Promise<boolean> {
     const spinner = createSpinner("Waiting for confirmation...").start();
     let peer: Peer;
 
     try {
-      peer = await this.getBestPeer();
+      peer = await FullNodePeer.connect();
     } catch (error: any) {
       spinner.error({ text: "Failed to connect to a peer." });
       console.error(`waitForConfirmation connection error: ${error.message}`);
