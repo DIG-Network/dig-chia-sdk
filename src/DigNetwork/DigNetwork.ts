@@ -39,6 +39,7 @@ export class DigNetwork {
   ): Promise<DigPeer | null> {
     const peerBlackList: string[] = initialBlackList;
     const serverCoin = new ServerCoin(storeId);
+    const allPeers: string[] = await serverCoin.getActiveEpochPeers();
 
     while (true) {
       try {
