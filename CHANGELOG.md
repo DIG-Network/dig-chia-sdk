@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.134](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.133...v0.0.1-alpha.134) (2024-10-05)
+
+
+### Bug Fixes
+
+* ping peer message ([b6d5a6a](https://github.com/DIG-Network/dig-chia-sdk/commit/b6d5a6add70f61d6d4453e9e2e1cfce843069515))
+
 ### [0.0.1-alpha.133](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.132...v0.0.1-alpha.133) (2024-10-05)
 
 
