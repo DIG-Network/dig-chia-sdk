@@ -8,7 +8,6 @@ import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { Environment } from "../utils/Environment";
 import NodeCache from "node-cache";
-import Bottleneck from "bottleneck";
 
 // Constants
 const FULLNODE_PORT = 8444;
@@ -25,17 +24,15 @@ const CACHE_DURATION = 30000; // in milliseconds
 const COOLDOWN_DURATION = 300000; // 5 minutes in milliseconds
 const MAX_PEERS_TO_FETCH = 5; // Maximum number of peers to fetch from DNS
 const MAX_RETRIES = 3; // Maximum number of retry attempts
-const MAX_REQUESTS_PER_MINUTE = 100; // Per-peer rate limit
 
 /**
- * Represents a peer with its reliability weight, address, and rate limiter.
+ * Represents a peer with its reliability weight and address.
  */
 interface PeerInfo {
   peer: Peer;
   weight: number;
   address: string;
   isConnected: boolean; // Indicates if the peer is currently connected
-  limiter: Bottleneck; // Rate limiter for the peer
 }
 
 /**
@@ -175,7 +172,7 @@ export class FullNodePeer {
 
     // Define prioritized peers
     FullNodePeer.prioritizedPeers = [
-      CHIA_NODES_HOST,
+      ...DNS_HOSTS, // Assuming CHIA_NODES_HOST is included in DNS_HOSTS
       LOCALHOST,
     ];
 
@@ -348,12 +345,6 @@ export class FullNodePeer {
     // Initialize or update peerInfos and availablePeers
     for (const ip of peerIPs) {
       if (!FullNodePeer.peerInfos.has(ip)) {
-        // Create a new Bottleneck limiter for the peer
-        const limiter = new Bottleneck({
-          maxConcurrent: 1, // One request at a time per peer
-          minTime: 60000 / MAX_REQUESTS_PER_MINUTE, // 600 ms between requests for 100 requests/min
-        });
-
         // Attempt to create a peer connection
         const sslFolder = path.resolve(os.homedir(), ".dig", "ssl");
         const certFile = path.join(sslFolder, "public_dig.crt");
@@ -391,7 +382,6 @@ export class FullNodePeer {
           weight: FullNodePeer.peerWeights.get(ip) || 1,
           address: ip,
           isConnected: true, // Mark as connected
-          limiter, // Assign the limiter
         });
 
         // Add to availablePeers
@@ -457,7 +447,7 @@ export class FullNodePeer {
   }
 
   /**
-   * Creates a proxy for the peer to handle errors, implement retries, and enforce per-peer throttling.
+   * Creates a proxy for the peer to handle errors, implement retries, and enforce round-robin selection.
    * @param {Peer} peer - The Peer instance.
    * @param {string} peerIP - The IP address of the peer.
    * @param {number} [retryCount=0] - The current retry attempt.
@@ -495,65 +485,48 @@ export class FullNodePeer {
 
             const selectedPeerInfo = FullNodePeer.peerInfos.get(selectedPeerIP)!;
 
-            // Schedule the method call via the selected peer's limiter
-            return selectedPeerInfo.limiter.schedule(async () => {
-              const peerInfo = FullNodePeer.peerInfos.get(selectedPeerIP);
-              if (!peerInfo || !peerInfo.isConnected) {
-                throw new Error(`Cannot perform operation: Peer ${selectedPeerIP} is disconnected.`);
+            if (!selectedPeerInfo || !selectedPeerInfo.isConnected) {
+              return Promise.reject(new Error(`Peer ${selectedPeerIP} is disconnected.`));
+            }
+
+            try {
+              // Bind the original method to the peer instance to preserve 'this'
+              const boundMethod = originalMethod.bind(selectedPeerInfo.peer);
+              const result = boundMethod(...args);
+              return result;
+            } catch (error: any) {
+              console.error(`Peer ${selectedPeerIP} encountered an error: ${error.message}`);
+
+              // Handle disconnection and retries
+              FullNodePeer.handlePeerDisconnection(selectedPeerIP);
+
+              // If maximum retries reached, throw the error
+              if (retryCount >= MAX_RETRIES) {
+                console.error(`Max retries reached for method ${String(prop)} on peer ${selectedPeerIP}.`);
+                return Promise.reject(error);
               }
 
-              try {
-                // Bind the original method to the peer instance to preserve 'this'
-                const boundMethod = originalMethod.bind(peerInfo.peer);
-                const result = await boundMethod(...args);
-                // On successful operation, increase the weight slightly
-                const currentWeight = FullNodePeer.peerWeights.get(selectedPeerIP) || 1;
-                FullNodePeer.peerWeights.set(selectedPeerIP, currentWeight + 0.1); // Increment weight
-                return result;
-              } catch (error: any) {
-                console.error(`Peer ${selectedPeerIP} encountered an error: ${error.message}`);
+              // Attempt to select a new peer and retry the method
+              return FullNodePeer.getBestPeer()
+                .then((newPeer) => {
+                  // Extract new peer's IP address
+                  const newPeerIP = FullNodePeer.extractPeerIP(newPeer);
 
-                // Check if the error is related to WebSocket or Operation timed out
-                if (
-                  error.message.includes("WebSocket") ||
-                  error.message.includes("Operation timed out")
-                ) {
-                  // Handle the disconnection and mark the peer accordingly
-                  FullNodePeer.handlePeerDisconnection(selectedPeerIP);
-
-                  // If maximum retries reached, throw the error
-                  if (retryCount >= MAX_RETRIES) {
-                    console.error(`Max retries reached for method ${String(prop)} on peer ${selectedPeerIP}.`);
-                    throw error;
+                  if (!newPeerIP) {
+                    throw new Error("Unable to extract IP from the new peer.");
                   }
 
-                  // Attempt to select a new peer and retry the method
-                  try {
-                    console.info(`Selecting a new peer to retry method ${String(prop)}...`);
-                    const newPeer = await FullNodePeer.getBestPeer();
+                  // Wrap the new peer with a proxy, incrementing the retry count
+                  const proxiedNewPeer = FullNodePeer.createPeerProxy(newPeer, newPeerIP, retryCount + 1);
 
-                    // Extract new peer's IP address
-                    const newPeerIP = FullNodePeer.extractPeerIP(newPeer);
-
-                    if (!newPeerIP) {
-                      throw new Error("Unable to extract IP from the new peer.");
-                    }
-
-                    // Wrap the new peer with a proxy, incrementing the retry count
-                    const proxiedNewPeer = FullNodePeer.createPeerProxy(newPeer, newPeerIP, retryCount + 1);
-
-                    // Retry the method on the new peer
-                    return await (proxiedNewPeer as any)[prop](...args);
-                  } catch (retryError: any) {
-                    console.error(`Retry failed on a new peer: ${retryError.message}`);
-                    throw retryError;
-                  }
-                } else {
-                  // For other errors, handle normally
-                  throw error;
-                }
-              }
-            });
+                  // Retry the method on the new peer
+                  return (proxiedNewPeer as any)[prop](...args);
+                })
+                .catch((retryError: any) => {
+                  console.error(`Retry failed on a new peer: ${retryError.message}`);
+                  return Promise.reject(retryError);
+                });
+            }
           };
         }
         return originalMethod;
