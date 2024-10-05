@@ -4,16 +4,13 @@ import { DigPeer } from "./DigPeer";
 import { DataStore, ServerCoin } from "../blockchain";
 import { DIG_FOLDER_PATH } from "../utils/config";
 import { withTimeout } from "../utils";
-import { promisify } from "util";
-
-const rename = promisify(fs.rename);
-const unlink = promisify(fs.unlink);
 
 export class DigNetwork {
   private dataStore: DataStore;
   private serverCoin: ServerCoin;
   private storeDir: string;
   private peerBlacklist: Map<string, Set<string>>; // Map of file keys to blacklists
+  private networkSyncActive: boolean = false;
 
   constructor(storeId: string) {
     this.dataStore = DataStore.from(storeId);
@@ -142,6 +139,7 @@ export class DigNetwork {
     maxRootsToProcess?: number
   ): Promise<void> {
     console.log("Starting file download process...");
+    this.networkSyncActive = true;
     let peerBlackList: string[] = [];
 
     try {
@@ -231,17 +229,14 @@ export class DigNetwork {
             }
           }
         }
-
-        DigNetwork.pingNetworkOfUpdate(
-          this.dataStore.StoreId,
-          rootInfo.root_hash
-        );
       }
 
       console.log("Syncing store complete.");
     } catch (error: any) {
       console.error("Error during syncing store from peers:", error);
       throw error;
+    } finally {
+      this.networkSyncActive = false;
     }
   }
 
