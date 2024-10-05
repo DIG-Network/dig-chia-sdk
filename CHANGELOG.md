@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.136](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.135...v0.0.1-alpha.136) (2024-10-05)
+
+
+### Features
+
+* more advanced fullnode throttle logic ([5cd3f5a](https://github.com/DIG-Network/dig-chia-sdk/commit/5cd3f5aff442a9e8570c257d0d35d2f998820116))
+
 ### [0.0.1-alpha.135](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.134...v0.0.1-alpha.135) (2024-10-05)
 
 
