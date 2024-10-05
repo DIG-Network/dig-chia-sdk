@@ -175,7 +175,7 @@ export class FullNodePeer {
 
     // Define prioritized peers
     FullNodePeer.prioritizedPeers = [
-      ...DNS_HOSTS, // Assuming CHIA_NODES_HOST is included in DNS_HOSTS
+      CHIA_NODES_HOST,
       LOCALHOST,
     ];
 
@@ -503,7 +503,9 @@ export class FullNodePeer {
               }
 
               try {
-                const result = await originalMethod.apply(peerInfo.peer, args);
+                // Bind the original method to the peer instance to preserve 'this'
+                const boundMethod = originalMethod.bind(peerInfo.peer);
+                const result = await boundMethod(...args);
                 // On successful operation, increase the weight slightly
                 const currentWeight = FullNodePeer.peerWeights.get(selectedPeerIP) || 1;
                 FullNodePeer.peerWeights.set(selectedPeerIP, currentWeight + 0.1); // Increment weight
