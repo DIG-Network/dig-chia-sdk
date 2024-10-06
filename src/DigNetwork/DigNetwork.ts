@@ -31,20 +31,31 @@ export class DigNetwork {
     // TODO: Implement this method
   }
 
+  /**
+   * Find a peer that has the store key and root hash.
+   *
+   * @param {string} storeId - The ID of the store.
+   * @param {string} rootHash - The root hash of the store.
+   * @param {string} [key] - Optional key to check for in the store.
+   * @param {string[]} [initialBlackList] - Initial list of blacklisted peer IPs.
+   * @returns {Promise<DigPeer | null>} - A valid peer or null if none found.
+   */
   public static async findPeerWithStoreKey(
     storeId: string,
     rootHash: string,
     key?: string,
     initialBlackList: string[] = []
   ): Promise<DigPeer | null> {
-    const peerBlackList: string[] = initialBlackList;
+    const peerBlackList = new Set(initialBlackList);
     const serverCoin = new ServerCoin(storeId);
-    const allPeers: string[] = await serverCoin.getActiveEpochPeers();
 
     while (true) {
       try {
-        // Sample 10 peers from the current epoch
-        const digPeers = await serverCoin.sampleCurrentEpoch(10, peerBlackList);
+        // Sample 10 peers from the current epoch excluding blacklisted peers
+        const digPeers = await serverCoin.sampleCurrentEpoch(
+          10,
+          Array.from(peerBlackList)
+        );
 
         // If no peers are returned, break out of the loop
         if (digPeers.length === 0) {
@@ -98,7 +109,7 @@ export class DigNetwork {
         }
 
         // If none of the peers were valid, add them to the blacklist
-        digPeers.forEach((peerIp) => peerBlackList.push(peerIp));
+        digPeers.forEach((peerIp) => peerBlackList.add(peerIp));
 
         // Retry with the next set of peers
         console.log("No valid peers found, retrying with new peers...");
@@ -243,7 +254,9 @@ export class DigNetwork {
     } finally {
       // Mark synchronization as inactive for this storeId
       DigNetwork.networkSyncMap.set(this.dataStore.StoreId, false);
-      console.log(`Network sync for storeId: ${this.dataStore.StoreId} has completed.`);
+      console.log(
+        `Network sync for storeId: ${this.dataStore.StoreId} has completed.`
+      );
     }
   }
 
