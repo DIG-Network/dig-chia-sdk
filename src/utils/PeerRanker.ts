@@ -4,9 +4,6 @@ import https from 'https';
 import { getOrCreateSSLCerts } from './ssl';
 import { asyncPool } from './promiseUtils';
 
-/**
- * Interface representing the metrics of a peer.
- */
 export interface PeerMetrics {
   ip: string;
   latency: number;    // in milliseconds
