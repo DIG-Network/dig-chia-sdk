@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.143](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.142...v0.0.1-alpha.143) (2024-10-05)
+
+
+### Features
+
+* add peer ranker ([7976293](https://github.com/DIG-Network/dig-chia-sdk/commit/79762933a44c964d5bdd7879b5dadc2923e19b2d))
+
 ### [0.0.1-alpha.142](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.141...v0.0.1-alpha.142) (2024-10-05)
 
 ### [0.0.1-alpha.141](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.140...v0.0.1-alpha.141) (2024-10-05)

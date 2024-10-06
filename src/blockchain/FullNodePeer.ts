@@ -511,25 +511,3 @@ export class FullNodePeer {
     }
   }
 }
-
-/**
- * Usage Example
- */
-async function main() {
-  try {
-    // Connect to the best available peer
-    const fullNodePeer = await FullNodePeer.connect();
-
-    // Example parentCoinInfo buffer (replace with actual data)
-    const parentCoinInfo = Buffer.from("your_parent_coin_info_here", "hex");
-
-    // Wait for coin confirmation
-    const isConfirmed = await FullNodePeer.waitForConfirmation(parentCoinInfo);
-
-    console.log(`Coin confirmed: ${isConfirmed}`);
-  } catch (error: any) {
-    console.error(`Error: ${error.message}`);
-  }
-}
-
-main();
