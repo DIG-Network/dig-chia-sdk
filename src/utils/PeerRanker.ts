@@ -1,5 +1,3 @@
-// src/PeerRanker.ts
-
 import axios, { AxiosRequestConfig } from 'axios';
 import fs from 'fs';
 import https from 'https';
@@ -15,22 +13,12 @@ export interface PeerMetrics {
 }
 
 /**
- * Configuration options for the PeerRanker.
- */
-interface PeerRankerOptions {
-  pingPath?: string;            // Optional: Path for latency ping (e.g., '/ping')
-  timeout?: number;             // Timeout for requests in milliseconds
-  uploadTestSize?: number;      // Size of the data to upload in bytes
-}
-
-/**
  * Utility class to rank peers based on latency and upload bandwidth using HTTPS with mTLS.
  */
 export class PeerRanker {
   private ipAddresses: string[];
   private static certPath: string;
   private static keyPath: string;
-  private pingPath: string;
   private timeout: number;
   private uploadTestSize: number;
 
@@ -43,11 +31,10 @@ export class PeerRanker {
    * @param ipAddresses - Array of IP addresses to rank.
    * @param options - Configuration options including paths to client certificates.
    */
-  constructor(ipAddresses: string[], options: PeerRankerOptions) {
+  constructor(ipAddresses: string[]) {
     this.ipAddresses = ipAddresses;
-    this.pingPath = options.pingPath || '/'; // Default to root path if not provided
-    this.timeout = options.timeout || 5000; // Default timeout: 5 seconds
-    this.uploadTestSize = options.uploadTestSize || 1024 * 1024; // Default: 1MB
+    this.timeout = 5000; // Default timeout: 5 seconds
+    this.uploadTestSize = 1024 * 1024; // Default: 1MB
 
     const { certPath, keyPath } = getOrCreateSSLCerts();
     PeerRanker.certPath = certPath;
@@ -58,11 +45,10 @@ export class PeerRanker {
    * Measures the latency of a given IP address using an HTTPS request.
    * Tries HEAD first, then falls back to GET if HEAD is not supported.
    * @param ip - The IP address of the peer.
-   * @returns Promise resolving to the latency in milliseconds.
+   * @returns Promise resolving to the latency in milliseconds or rejecting if the peer fails.
    */
   private async measureLatency(ip: string): Promise<number> {
-    const path = this.pingPath;
-    const url = `https://${ip}${path}`;
+    const url = `https://${ip}:4159/diagnostics/ping`;
     
     // Configuration for HEAD request
     const configHead: AxiosRequestConfig = {
@@ -102,17 +88,17 @@ export class PeerRanker {
       return latency;
     } catch (error: any) {
       console.error(`Latency measurement failed for IP ${ip}:`, error.message);
-      return Infinity; // Indicate unreachable or unresponsive peer
+      throw new Error(`Latency measurement failed for IP ${ip}`); // Fail the peer entirely
     }
   }
 
   /**
    * Measures the upload bandwidth of a given IP address by sending random data.
    * @param ip - The IP address of the peer.
-   * @returns Promise resolving to the upload bandwidth in bytes per second.
+   * @returns Promise resolving to the upload bandwidth in bytes per second or rejecting if the peer fails.
    */
   private async measureBandwidth(ip: string): Promise<number> {
-    const url = `https://${ip}/upload`; // Assume /upload as the endpoint for upload testing
+    const url = `https://${ip}:4159/diagnostics/bandwidth`;
 
     // Generate random data
     const randomData = Buffer.alloc(this.uploadTestSize, 'a'); // 1MB of 'a's
@@ -135,7 +121,7 @@ export class PeerRanker {
       maxBodyLength: Infinity,
     };
 
-    return new Promise<number>((resolve) => {
+    return new Promise<number>((resolve, reject) => {
       const startTime = Date.now();
 
       axios(config)
@@ -146,26 +132,34 @@ export class PeerRanker {
         })
         .catch((error: any) => {
           console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
-          resolve(0); // Indicate failure in measuring bandwidth
+          reject(new Error(`Bandwidth measurement failed for IP ${ip}`)); // Fail the peer entirely
         });
     });
   }
 
   /**
    * Ranks the peers based on measured latency and upload bandwidth.
+   * Unresponsive peers are excluded from the final ranking.
    * @returns Promise resolving to an array of PeerMetrics sorted by latency and bandwidth.
    */
   public async rankPeers(): Promise<PeerMetrics[]> {
     const metricsPromises = this.ipAddresses.map(async (ip) => {
-      const [latency, bandwidth] = await Promise.all([
-        this.measureLatency(ip),
-        this.measureBandwidth(ip),
-      ]);
-
-      return { ip, latency, bandwidth };
+      try {
+        const [latency, bandwidth] = await Promise.all([
+          this.measureLatency(ip),
+          this.measureBandwidth(ip),
+        ]);
+        return { ip, latency, bandwidth };
+      } catch (error) {
+        // Peer failed, so we skip it by returning null
+        return null;
+      }
     });
 
-    const peerMetrics: PeerMetrics[] = await Promise.all(metricsPromises);
+    // Await all promises and filter out the null values (failed peers)
+    const peerMetrics: PeerMetrics[] = (await Promise.all(metricsPromises)).filter(
+      (metrics): metrics is PeerMetrics => metrics !== null
+    );
 
     // Sort by lowest latency first, then by highest bandwidth
     peerMetrics.sort((a, b) => {
