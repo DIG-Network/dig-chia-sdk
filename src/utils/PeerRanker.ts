@@ -1,8 +1,12 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import fs from 'fs';
 import https from 'https';
+import NodeCache from 'node-cache'; // Import node-cache
 import { getOrCreateSSLCerts } from './ssl';
 import { asyncPool } from './promiseUtils';
+
+// Cache with TTL of 1 day (86400 seconds)
+const peerCache = new NodeCache({ stdTTL: 86400 });
 
 export interface PeerMetrics {
   ip: string;
@@ -42,12 +46,18 @@ export class PeerRanker {
   /**
    * Measures the latency of a given IP address using an HTTPS request.
    * Tries HEAD first, then falls back to GET if HEAD is not supported.
+   * If the latency is cached, returns the cached value.
    * @param ip - The IP address of the peer.
    * @returns Promise resolving to the latency in milliseconds or rejecting if the peer fails.
    */
   private async measureLatency(ip: string): Promise<number> {
+    const cachedMetrics = peerCache.get<PeerMetrics>(ip);
+    if (cachedMetrics && cachedMetrics.latency) {
+      console.log(`Latency for IP ${ip} retrieved from cache.`);
+      return cachedMetrics.latency;
+    }
+
     const url = `https://${ip}:4159/diagnostics/ping`;
-    
     const configHead: AxiosRequestConfig = {
       url: url,
       method: 'HEAD',
@@ -81,6 +91,10 @@ export class PeerRanker {
         await axios(configGet);
       }
       const latency = Date.now() - startTime;
+
+      // Cache the latency for the IP
+      peerCache.set(ip, { ...cachedMetrics, latency } as PeerMetrics);
+
       return latency;
     } catch (error: any) {
       console.error(`Latency measurement failed for IP ${ip}:`, error.message);
@@ -90,10 +104,17 @@ export class PeerRanker {
 
   /**
    * Measures the upload bandwidth of a given IP address by sending random data.
+   * If the bandwidth is cached, returns the cached value.
    * @param ip - The IP address of the peer.
    * @returns Promise resolving to the upload bandwidth in bytes per second or rejecting if the peer fails.
    */
   private async measureBandwidth(ip: string): Promise<number> {
+    const cachedMetrics = peerCache.get<PeerMetrics>(ip);
+    if (cachedMetrics && cachedMetrics.bandwidth) {
+      console.log(`Bandwidth for IP ${ip} retrieved from cache.`);
+      return cachedMetrics.bandwidth;
+    }
+
     const url = `https://${ip}:4159/diagnostics/bandwidth`;
     const randomData = Buffer.alloc(this.uploadTestSize, 'a');
 
@@ -121,6 +142,10 @@ export class PeerRanker {
       await axios(config);
       const timeElapsed = (Date.now() - startTime) / 1000;
       const bandwidth = this.uploadTestSize / timeElapsed;
+
+      // Cache the bandwidth for the IP
+      peerCache.set(ip, { ...cachedMetrics, bandwidth } as PeerMetrics);
+
       return bandwidth;
     } catch (error: any) {
       console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
@@ -153,7 +178,7 @@ export class PeerRanker {
     // Process all peers with a concurrency limit and cooldown between batches
     const peerMetrics: PeerMetrics[] = (
       await asyncPool(limit, this.ipAddresses, iteratorFn, cooldown)
-    ).filter((metrics: any): metrics is PeerMetrics => metrics !== null); // Use a type guard
+    ).filter((metrics): metrics is PeerMetrics => metrics !== null); // Use a type guard
 
     // Sort by lowest latency first, then by highest bandwidth
     peerMetrics.sort((a, b) => {

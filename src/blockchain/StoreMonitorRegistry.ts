@@ -155,7 +155,7 @@ export class StoreMonitorRegistry {
     callback: StoreUpdateCallback
   ): Promise<void> {
     let retryCount = 0;
-    const maxRetryDelay = 60000; // 60 seconds
+    const maxRetryDelay = 1000; // 60 seconds
 
     while (this.activeMonitors.has(storeId)) {
       try {
