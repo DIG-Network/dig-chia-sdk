@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.155](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.154...v0.0.1-alpha.155) (2024-10-06)
+
+
+### Features
+
+* support hostnames in publicip env ([27418ef](https://github.com/DIG-Network/dig-chia-sdk/commit/27418efdb0b90d61648b2da6ef89606caf1e9431))
+
 ### [0.0.1-alpha.154](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.153...v0.0.1-alpha.154) (2024-10-06)
 
 
