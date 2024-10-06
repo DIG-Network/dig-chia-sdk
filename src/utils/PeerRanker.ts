@@ -53,7 +53,6 @@ export class PeerRanker {
   private async measureLatency(ip: string): Promise<number> {
     const cachedMetrics = peerCache.get<PeerMetrics>(ip);
     if (cachedMetrics && cachedMetrics.latency) {
-      console.log(`Latency for IP ${ip} retrieved from cache.`);
       return cachedMetrics.latency;
     }
 
@@ -97,7 +96,6 @@ export class PeerRanker {
 
       return latency;
     } catch (error: any) {
-      console.error(`Latency measurement failed for IP ${ip}:`, error.message);
       throw new Error(`Latency measurement failed for IP ${ip}`);
     }
   }
@@ -148,7 +146,6 @@ export class PeerRanker {
 
       return bandwidth;
     } catch (error: any) {
-      console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
       throw new Error(`Bandwidth measurement failed for IP ${ip}`);
     }
   }

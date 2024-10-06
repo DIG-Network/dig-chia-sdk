@@ -1,6 +1,3 @@
-/*
- * Stopgap until better solution for finding public IPS found
- */
 import superagent from "superagent";
 import { Environment } from "./Environment";
 
@@ -11,22 +8,27 @@ const RETRY_DELAY = 2000; // in milliseconds
 const ipv4Regex =
   /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 const ipv6Regex =
-  /^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|(([0-9a-fA-F]{1,4}:){1,7}|:):(([0-9a-fA-F]{1,4}:){1,6}|:):([0-9a-fA-F]{1,4}|:):([0-9a-fA-F]{1,4}|:)|::)$/;
+  /^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|(([0-9a-fA-F]{1,7}|:):){1,7}([0-9a-fA-F]{1,4}|:))$/;
 
-// Helper function to validate the IP address
-const isValidIp = (ip: string): boolean => {
-  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+// Regular expression for validating hostnames
+const hostnameRegex = /^(([a-zA-Z0-9](-*[a-zA-Z0-9])*)\.)*[a-zA-Z]{2,}$/;
+
+// Helper function to validate the IP address or hostname
+const isValidHost = (host: string): boolean => {
+  return ipv4Regex.test(host) || ipv6Regex.test(host) || hostnameRegex.test(host);
 };
 
-export const getPublicIpAddress = async (): Promise<string | undefined> => {
-  const publicIp = Environment.PUBLIC_IP;
+export const getPublicHost = async (): Promise<string | undefined> => {
+  const publicHost = Environment.PUBLIC_IP;
 
-  if (publicIp) {
-    console.log("Public IP address from env:", publicIp);
-    if (isValidIp(publicIp)) {
-      return publicIp;
+  if (publicHost) {
+    console.log("Public IP/Hostname from env:", publicHost);
+
+    if (isValidHost(publicHost)) {
+      return publicHost;
     }
-    console.error("Invalid public IP address in environment variable");
+
+    console.error("Invalid public IP/Hostname in environment variable");
     return undefined;
   }
 
@@ -41,22 +43,22 @@ export const getPublicIpAddress = async (): Promise<string | undefined> => {
       if (response.body && response.body.success) {
         const ipAddress = response.body.ip_address;
 
-        if (isValidIp(ipAddress)) {
+        if (isValidHost(ipAddress)) {
           return ipAddress;
         }
-        throw new Error("Invalid IP address format received");
+        throw new Error("Invalid IP address or hostname format received");
       }
-      throw new Error("Failed to retrieve public IP address");
+      throw new Error("Failed to retrieve public host");
     } catch (error: any) {
       attempt++;
       console.error(
-        `Error fetching public IP address (Attempt ${attempt}):`,
+        `Error fetching public host (Attempt ${attempt}):`,
         error.message
       );
 
       if (attempt >= MAX_RETRIES) {
         throw new Error(
-          "Could not retrieve public IP address after several attempts"
+          "Could not retrieve public host after several attempts"
         );
       }
 
@@ -64,6 +66,7 @@ export const getPublicIpAddress = async (): Promise<string | undefined> => {
     }
   }
 };
+
 
 // Helper function to wrap IPv6 addresses in brackets
 export const formatHost = (host: string): string => {

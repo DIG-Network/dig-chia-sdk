@@ -14,7 +14,7 @@ import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
 import NodeCache from "node-cache";
-import { getPublicIpAddress } from "../utils/network";
+import { getPublicHost } from "../utils/network";
 import { Environment } from "../utils/Environment";
 
 const serverCoinCollateral = 300_000_000;
@@ -265,7 +265,7 @@ export class ServerCoin {
     blacklist: string[] = []
   ): Promise<string[]> {
     // We dont want our own IP to be included
-    const myIp = await getPublicIpAddress();
+    const myIp = await getPublicHost();
     if (myIp) {
       blacklist.push(myIp);
     }
