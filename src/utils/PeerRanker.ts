@@ -11,32 +11,28 @@ import { getOrCreateSSLCerts } from './ssl';
 export interface PeerMetrics {
   ip: string;
   latency: number;    // in milliseconds
-  bandwidth: number;  // in bytes per second
+  bandwidth: number;  // in bytes per second (upload speed)
 }
 
 /**
  * Configuration options for the PeerRanker.
  */
 interface PeerRankerOptions {
-  clientCertPath: string;       // Path to the client certificate (.crt)
-  clientKeyPath: string;        // Path to the client key (.key)
-  bandwidthTestPath: string;    // Path or endpoint for bandwidth testing (e.g., '/testfile')
   pingPath?: string;            // Optional: Path for latency ping (e.g., '/ping')
   timeout?: number;             // Timeout for requests in milliseconds
-  bandwidthTestSize?: number;   // Expected size of the bandwidth test file in bytes (for reference)
+  uploadTestSize?: number;      // Size of the data to upload in bytes
 }
 
 /**
- * Utility class to rank peers based on latency and bandwidth using HTTPS with mTLS.
+ * Utility class to rank peers based on latency and upload bandwidth using HTTPS with mTLS.
  */
 export class PeerRanker {
   private ipAddresses: string[];
   private static certPath: string;
   private static keyPath: string;
-  private bandwidthTestPath: string;
   private pingPath: string;
   private timeout: number;
-  private bandwidthTestSize: number;
+  private uploadTestSize: number;
 
   // Internal properties for iteration
   private sortedPeers: PeerMetrics[] = [];
@@ -49,10 +45,9 @@ export class PeerRanker {
    */
   constructor(ipAddresses: string[], options: PeerRankerOptions) {
     this.ipAddresses = ipAddresses;
-    this.bandwidthTestPath = options.bandwidthTestPath;
     this.pingPath = options.pingPath || '/'; // Default to root path if not provided
     this.timeout = options.timeout || 5000; // Default timeout: 5 seconds
-    this.bandwidthTestSize = options.bandwidthTestSize || 1024 * 1024; // Default: 1MB
+    this.uploadTestSize = options.uploadTestSize || 1024 * 1024; // Default: 1MB
 
     const { certPath, keyPath } = getOrCreateSSLCerts();
     PeerRanker.certPath = certPath;
@@ -112,47 +107,44 @@ export class PeerRanker {
   }
 
   /**
-   * Measures the bandwidth of a given IP address by downloading a file and calculating throughput.
+   * Measures the upload bandwidth of a given IP address by sending random data.
    * @param ip - The IP address of the peer.
-   * @returns Promise resolving to the bandwidth in bytes per second.
+   * @returns Promise resolving to the upload bandwidth in bytes per second.
    */
   private async measureBandwidth(ip: string): Promise<number> {
-    const url = `https://${ip}${this.bandwidthTestPath}`;
-    
+    const url = `https://${ip}/upload`; // Assume /upload as the endpoint for upload testing
+
+    // Generate random data
+    const randomData = Buffer.alloc(this.uploadTestSize, 'a'); // 1MB of 'a's
+
     const config: AxiosRequestConfig = {
       url: url,
-      method: 'GET',
-      responseType: 'stream',
+      method: 'POST',
+      data: randomData,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': this.uploadTestSize,
+      },
       httpsAgent: new https.Agent({
         cert: fs.readFileSync(PeerRanker.certPath),
         key: fs.readFileSync(PeerRanker.keyPath),
         rejectUnauthorized: false, // Set to true in production
       }),
       timeout: this.timeout,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
     };
 
     return new Promise<number>((resolve) => {
       const startTime = Date.now();
-      let bytesReceived = 0;
 
       axios(config)
-        .then((response) => {
-          response.data.on('data', (chunk: Buffer) => {
-            bytesReceived += chunk.length;
-          });
-
-          response.data.on('end', () => {
-            const timeElapsed = (Date.now() - startTime) / 1000; // seconds
-            const bandwidth = bytesReceived / timeElapsed; // bytes per second
-            resolve(bandwidth);
-          });
-
-          response.data.on('error', (err: Error) => {
-            console.error(`Bandwidth measurement error for IP ${ip}:`, err.message);
-            resolve(0); // Indicate failure in measuring bandwidth
-          });
+        .then(() => {
+          const timeElapsed = (Date.now() - startTime) / 1000; // seconds
+          const bandwidth = this.uploadTestSize / timeElapsed; // bytes per second
+          resolve(bandwidth);
         })
-        .catch((error) => {
+        .catch((error: any) => {
           console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
           resolve(0); // Indicate failure in measuring bandwidth
         });
@@ -160,7 +152,7 @@ export class PeerRanker {
   }
 
   /**
-   * Ranks the peers based on measured latency and bandwidth.
+   * Ranks the peers based on measured latency and upload bandwidth.
    * @returns Promise resolving to an array of PeerMetrics sorted by latency and bandwidth.
    */
   public async rankPeers(): Promise<PeerMetrics[]> {
