@@ -65,7 +65,7 @@ export class Environment {
   // Static getter for PUBLIC_IP (valid IP)
   static get PUBLIC_IP(): string | undefined {
     const value = process.env["PUBLIC_IP"];
-    return value && this.isValidHostnameOrIp(value) ? value : undefined;
+    return value;
   }
 
   // Static getter for DISK_SPACE_LIMIT_BYTES (number, optional)
