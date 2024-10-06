@@ -12,3 +12,4 @@ export * from './ssl';
 export * from './validationUtils';
 export * from './Environment';
 export * from './promiseUtils';
+export * from './PeerRanker';
