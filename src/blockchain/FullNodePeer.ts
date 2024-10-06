@@ -87,7 +87,7 @@ export class FullNodePeer {
     if (this.peer) return; // Already initialized
 
     try {
-      const bestPeer = await FullNodePeer.getBestPeer();
+      const bestPeer = await this.getBestPeer();
       this.peer = bestPeer;
       FullNodePeer.instance = this; // Assign the initialized instance
     } catch (error: any) {
@@ -335,7 +335,7 @@ export class FullNodePeer {
    * Connects to the best available peer based on weighted selection and reliability.
    * @returns {Promise<Peer>} The connected Peer instance.
    */
-  private static async getBestPeer(): Promise<Peer> {
+  private async getBestPeer(): Promise<Peer> {
     const now = Date.now();
 
     // Refresh cachedPeer if expired
@@ -405,13 +405,72 @@ export class FullNodePeer {
 
     // Initialize rate limiter for this peer
     FullNodePeer.peerLimiters.set(selectedPeerIP, limiter);
+    const proxiedPeer = this.createPeerProxy(peer, selectedPeerIP);
 
     // Cache the peer
     FullNodePeer.cachedPeer = { peer: peer, timestamp: now };
 
     console.log(`Using Fullnode Peer: ${selectedPeerIP}`);
 
-    return peer;
+    return proxiedPeer;
+  }
+
+  private createPeerProxy(peer: Peer, peerIP: string): Peer {
+    return new Proxy(peer, {
+      get: (target, prop) => {
+        const originalMethod = (target as any)[prop];
+
+        if (typeof originalMethod === "function") {
+          return async (...args: any[]) => {
+            let timeoutId: NodeJS.Timeout | undefined;
+
+            // Start the timeout to forget the peer after 1 minute
+            const timeoutPromise = new Promise<null>((_, reject) => {
+              timeoutId = setTimeout(() => {
+                FullNodePeer.cachedPeer = null;
+                reject(
+                  new Error("Operation timed out. Reconnecting to a new peer.")
+                );
+              }, 60000); // 1 minute
+            });
+
+            try {
+              // Run the original method and race it against the timeout
+              const result = await Promise.race([
+                originalMethod.apply(target, args),
+                timeoutPromise,
+              ]);
+
+              // Clear the timeout if the operation succeeded
+              if (timeoutId) {
+                clearTimeout(timeoutId);
+              }
+
+              return result;
+            } catch (error: any) {
+              // If the error is WebSocket-related or timeout, reset the peer
+              if (
+                error.message.includes("WebSocket") ||
+                error.message.includes("Operation timed out")
+              ) {
+                FullNodePeer.cachedPeer = null;
+                // @ts-ignore
+                FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
+             
+                console.info(
+                  `Fullnode Peer error, reconnecting to a new peer...`
+                );
+                this.handlePeerDisconnection(peerIP);
+                const newPeer = await this.getBestPeer();
+                return (newPeer as any)[prop](...args);
+              }
+              throw error;
+            }
+          };
+        }
+        return originalMethod;
+      },
+    });
   }
 
   /**
