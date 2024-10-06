@@ -16,7 +16,9 @@ export class Environment {
     // Hostname regex (simple, allows subdomains but not special characters)
     const hostnamePattern =
       /^(([a-zA-Z0-9](-*[a-zA-Z0-9])*)\.)*([a-zA-Z0-9](-*[a-zA-Z0-9])*)\.?$/;
-    return this.isValidIp(hostname) || hostnamePattern.test(hostname);
+    const ipv6Pattern =
+      /^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|(([0-9a-fA-F]{1,4}:){1,7}|:):(([0-9a-fA-F]{1,4}:){1,6}|:):([0-9a-fA-F]{1,4}|:):([0-9a-fA-F]{1,4}|:)|::)$/;
+    return this.isValidIp(hostname) || ipv6Pattern.test(hostname) || hostnamePattern.test(hostname);
   }
 
   // Helper to validate if a number is a valid port (between 1 and 65535)
