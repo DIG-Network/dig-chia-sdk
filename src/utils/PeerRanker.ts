@@ -2,6 +2,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import fs from 'fs';
 import https from 'https';
 import { getOrCreateSSLCerts } from './ssl';
+import { asyncPool } from './promiseUtils';
 
 /**
  * Interface representing the metrics of a peer.
@@ -29,13 +30,13 @@ export class PeerRanker {
   /**
    * Constructs a PeerRanker instance.
    * @param ipAddresses - Array of IP addresses to rank.
-   * @param options - Configuration options including paths to client certificates.
    */
-  constructor(ipAddresses: string[]) {
+  constructor(ipAddresses: string[], timeout: number = 5000, uploadTestSize: number = 1024 * 1024) {
     this.ipAddresses = ipAddresses;
-    this.timeout = 5000; // Default timeout: 5 seconds
-    this.uploadTestSize = 1024 * 1024; // Default: 1MB
+    this.timeout = timeout; // Allow customizable timeout
+    this.uploadTestSize = uploadTestSize; // Default upload size: 1MB
 
+    // Fetch the SSL certificates used for mTLS.
     const { certPath, keyPath } = getOrCreateSSLCerts();
     PeerRanker.certPath = certPath;
     PeerRanker.keyPath = keyPath;
@@ -50,35 +51,33 @@ export class PeerRanker {
   private async measureLatency(ip: string): Promise<number> {
     const url = `https://${ip}:4159/diagnostics/ping`;
     
-    // Configuration for HEAD request
     const configHead: AxiosRequestConfig = {
       url: url,
       method: 'HEAD',
       httpsAgent: new https.Agent({
         cert: fs.readFileSync(PeerRanker.certPath),
         key: fs.readFileSync(PeerRanker.keyPath),
-        rejectUnauthorized: false, // Set to true in production
+        rejectUnauthorized: false,
       }),
       timeout: this.timeout,
-      validateStatus: (status) => status < 500, // Resolve only if status is less than 500
+      validateStatus: (status) => status < 500,
     };
 
     const startTime = Date.now();
     try {
       const response = await axios(configHead);
-      if (response.status === 405) { // Method Not Allowed
-        // Fallback to GET with Range header to minimize data transfer
+      if (response.status === 405) {
         const configGet: AxiosRequestConfig = {
           url: url,
           method: 'GET',
           httpsAgent: new https.Agent({
             cert: fs.readFileSync(PeerRanker.certPath),
             key: fs.readFileSync(PeerRanker.keyPath),
-            rejectUnauthorized: false, // Set to true in production
+            rejectUnauthorized: false,
           }),
           timeout: this.timeout,
           headers: {
-            'Range': 'bytes=0-0', // Request only the first byte
+            'Range': 'bytes=0-0',
           },
           validateStatus: (status) => status < 500,
         };
@@ -88,7 +87,7 @@ export class PeerRanker {
       return latency;
     } catch (error: any) {
       console.error(`Latency measurement failed for IP ${ip}:`, error.message);
-      throw new Error(`Latency measurement failed for IP ${ip}`); // Fail the peer entirely
+      throw new Error(`Latency measurement failed for IP ${ip}`);
     }
   }
 
@@ -99,9 +98,7 @@ export class PeerRanker {
    */
   private async measureBandwidth(ip: string): Promise<number> {
     const url = `https://${ip}:4159/diagnostics/bandwidth`;
-
-    // Generate random data
-    const randomData = Buffer.alloc(this.uploadTestSize, 'a'); // 1MB of 'a's
+    const randomData = Buffer.alloc(this.uploadTestSize, 'a');
 
     const config: AxiosRequestConfig = {
       url: url,
@@ -114,36 +111,36 @@ export class PeerRanker {
       httpsAgent: new https.Agent({
         cert: fs.readFileSync(PeerRanker.certPath),
         key: fs.readFileSync(PeerRanker.keyPath),
-        rejectUnauthorized: false, // Set to true in production
+        rejectUnauthorized: false,
       }),
       timeout: this.timeout,
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     };
 
-    return new Promise<number>((resolve, reject) => {
-      const startTime = Date.now();
+    const startTime = Date.now();
 
-      axios(config)
-        .then(() => {
-          const timeElapsed = (Date.now() - startTime) / 1000; // seconds
-          const bandwidth = this.uploadTestSize / timeElapsed; // bytes per second
-          resolve(bandwidth);
-        })
-        .catch((error: any) => {
-          console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
-          reject(new Error(`Bandwidth measurement failed for IP ${ip}`)); // Fail the peer entirely
-        });
-    });
+    try {
+      await axios(config);
+      const timeElapsed = (Date.now() - startTime) / 1000;
+      const bandwidth = this.uploadTestSize / timeElapsed;
+      return bandwidth;
+    } catch (error: any) {
+      console.error(`Bandwidth measurement failed for IP ${ip}:`, error.message);
+      throw new Error(`Bandwidth measurement failed for IP ${ip}`);
+    }
   }
 
   /**
    * Ranks the peers based on measured latency and upload bandwidth.
    * Unresponsive peers are excluded from the final ranking.
+   * @param cooldown - Cooldown time in milliseconds between batches.
    * @returns Promise resolving to an array of PeerMetrics sorted by latency and bandwidth.
    */
-  public async rankPeers(): Promise<PeerMetrics[]> {
-    const metricsPromises = this.ipAddresses.map(async (ip) => {
+  public async rankPeers(cooldown: number = 500): Promise<PeerMetrics[]> {
+    const limit = 5; // Limit to 5 parallel requests at a time
+
+    const iteratorFn = async (ip: string): Promise<PeerMetrics | null> => {
       try {
         const [latency, bandwidth] = await Promise.all([
           this.measureLatency(ip),
@@ -151,15 +148,15 @@ export class PeerRanker {
         ]);
         return { ip, latency, bandwidth };
       } catch (error) {
-        // Peer failed, so we skip it by returning null
+        // Peer failed, skip it by returning null
         return null;
       }
-    });
+    };
 
-    // Await all promises and filter out the null values (failed peers)
-    const peerMetrics: PeerMetrics[] = (await Promise.all(metricsPromises)).filter(
-      (metrics): metrics is PeerMetrics => metrics !== null
-    );
+    // Process all peers with a concurrency limit and cooldown between batches
+    const peerMetrics: PeerMetrics[] = (
+      await asyncPool(limit, this.ipAddresses, iteratorFn, cooldown)
+    ).filter((metrics: any): metrics is PeerMetrics => metrics !== null); // Use a type guard
 
     // Sort by lowest latency first, then by highest bandwidth
     peerMetrics.sort((a, b) => {
@@ -169,9 +166,7 @@ export class PeerRanker {
       return a.latency - b.latency; // Lower latency is better
     });
 
-    // Update the internal sorted list
     this.sortedPeers = peerMetrics;
-    // Reset the iterator index
     this.currentIndex = 0;
 
     return peerMetrics;
