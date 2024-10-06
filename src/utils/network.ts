@@ -19,7 +19,7 @@ const isValidHost = (host: string): boolean => {
 };
 
 export const getPublicHost = async (): Promise<string | undefined> => {
-  const publicHost = Environment.PUBLIC_IP;
+  const publicHost = process.env.PUBLIC_IP;
 
   if (publicHost) {
     console.log("Public IP/Hostname from env:", publicHost);
