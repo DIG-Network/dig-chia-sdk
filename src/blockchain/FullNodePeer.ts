@@ -454,12 +454,7 @@ export class FullNodePeer {
                 error.message.includes("Operation timed out")
               ) {
                 FullNodePeer.cachedPeer = null;
-                // @ts-ignore
-                FullNodePeer.memoizedFetchNewPeerIPs.cache.clear();
              
-                console.info(
-                  `Fullnode Peer error, reconnecting to a new peer...`
-                );
                 this.handlePeerDisconnection(peerIP);
                 const newPeer = await this.getBestPeer();
                 return (newPeer as any)[prop](...args);

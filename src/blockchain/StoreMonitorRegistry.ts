@@ -73,7 +73,6 @@ export class StoreMonitorRegistry {
     callback: StoreUpdateCallback
   ): Promise<void> {
     if (this.activeMonitors.has(storeId)) {
-      console.log(`Registry: Monitor already running for storeId: ${storeId}`);
       return;
     }
 
