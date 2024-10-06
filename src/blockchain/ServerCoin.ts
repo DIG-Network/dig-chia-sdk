@@ -265,9 +265,9 @@ export class ServerCoin {
     blacklist: string[] = []
   ): Promise<string[]> {
     // We dont want our own IP to be included
-    const myIp = await getPublicHost();
-    if (myIp) {
-      blacklist.push(myIp);
+    const host = await getPublicHost();
+    if (host) {
+      blacklist.push(host);
     }
 
     const serverCoinPeers = await this.getAllEpochPeers(epoch, blacklist);
