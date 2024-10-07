@@ -20,6 +20,10 @@ import { promptCredentials } from "../utils/credentialsUtils";
 import { STORE_PATH } from "../utils/config";
 import { Wallet, DataStore } from "../blockchain";
 import { formatHost } from "../utils/network";
+import NodeCache from "node-cache";
+
+// Initialize cache with a TTL of 1 week (604800 seconds)
+const storeExistsCache = new NodeCache({ stdTTL: 86400 });
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -140,7 +144,10 @@ export class PropagationServer {
 
       try {
         const response = await axios.post(url, data, config);
-        console.log(green(`✔ Successfully pinged peer: ${this.ipAddress}`));
+        console.log(
+          green(`✔ Successfully pinged peer: ${this.ipAddress}`),
+          response
+        );
         return response.data;
       } catch (error: any) {
         console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
@@ -181,14 +188,34 @@ export class PropagationServer {
   }
 
   /**
-   * Check if the store and optional root hash exist by making a HEAD request.
+   * Checks if the store exists and optionally if a specific rootHash exists.
+   * Utilizes caching to improve performance.
+   *
+   * @param rootHash - (Optional) The root hash to check.
+   * @returns A promise that resolves to an object containing store existence and root hash existence.
    */
-  async checkStoreExists(
+  public async checkStoreExists(
     rootHash?: string
   ): Promise<{ storeExists: boolean; rootHashExists: boolean }> {
+    // Construct the cache key
+    const cacheKey = rootHash
+      ? `${this.storeId}-${rootHash}`
+      : `${this.storeId}-nohash`;
+
+    // Check if the result is already cached
+    const cachedResult = storeExistsCache.get<{
+      storeExists: boolean;
+      rootHashExists: boolean;
+    }>(cacheKey);
+    if (cachedResult !== undefined) {
+      return cachedResult;
+    }
+
+    // If not cached, proceed with the HTTP request
     const spinner = createSpinner(
       `Checking if store ${this.storeId} exists...`
     ).start();
+
     try {
       const config: AxiosRequestConfig = {
         httpsAgent: this.createHttpsAgent(),
@@ -221,7 +248,11 @@ export class PropagationServer {
         });
       }
 
-      return { storeExists, rootHashExists };
+      const result = { storeExists, rootHashExists };
+
+      storeExistsCache.set(cacheKey, result);
+
+      return result;
     } catch (error: any) {
       spinner.error({ text: red("Error checking if store exists:") });
       console.error(red(error.message));
@@ -625,6 +656,7 @@ export class PropagationServer {
 
       return Buffer.concat(dataBuffers);
     } catch (error) {
+      storeExistsCache.del(`${this.storeId}-nohash`);
       throw error;
     } finally {
       if (progressBar) {
@@ -773,6 +805,8 @@ export class PropagationServer {
         console.log("integrity check");
       }
     } catch (error) {
+      storeExistsCache.del(`${this.storeId}-nohash`);
+      storeExistsCache.del(`${this.storeId}-${rootHash}`);
       throw error;
     } finally {
       if (progressBar) {
