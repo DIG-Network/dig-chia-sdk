@@ -24,6 +24,7 @@ import NodeCache from "node-cache";
 
 // Initialize cache with a TTL of 1 week (604800 seconds)
 const storeExistsCache = new NodeCache({ stdTTL: 86400 });
+const pingUpdatecache = new NodeCache({ stdTTL: 86400 });
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -119,9 +120,17 @@ export class PropagationServer {
 
   /**
    * Ping the current peer about an update to the store, passing rootHash.
+   * If the combination of ipAddress-storeId-rootHash is cached as "successfully synced", skip the request.
    * @param rootHash - The root hash for the store update.
    */
   async pingUpdate(rootHash: string): Promise<void> {
+    const cacheKey = `${this.ipAddress}-${this.storeId}-${rootHash}`;
+
+    // Check if response for this combination is already cached
+    if (pingUpdatecache.get(cacheKey) === "successfully synced") {
+      return;
+    }
+
     try {
       const httpsAgent = this.createHttpsAgent();
       const url = `https://${formatHost(this.ipAddress)}:${
@@ -135,7 +144,6 @@ export class PropagationServer {
         },
       };
 
-      // Data to send in the request (storeId and rootHash)
       const data = {
         storeId: this.storeId,
         rootHash: rootHash,
@@ -148,6 +156,12 @@ export class PropagationServer {
           green(`✔ Successfully pinged peer: ${this.ipAddress}`),
           response.data
         );
+
+        if (response.data.message === "Already Synced") {
+          // Cache the response as "successfully synced" to avoid redundant requests
+          pingUpdatecache.set(cacheKey, "successfully synced");
+        }
+
         return response.data;
       } catch (error: any) {
         console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
