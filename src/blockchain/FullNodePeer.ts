@@ -103,7 +103,6 @@ export class FullNodePeer {
   public static async connect(): Promise<Peer> {
     const instance = FullNodePeer.getInstance();
     // Remove cached peer to ensure a new connection each time
-    FullNodePeer.cachedPeer = null;
     await instance.initialize();
     return instance.peer;
   }
