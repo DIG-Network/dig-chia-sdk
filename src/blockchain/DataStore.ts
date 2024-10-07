@@ -41,6 +41,7 @@ import { StoreMonitorRegistry } from "./StoreMonitorRegistry";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
 const rootHistoryCache = new NodeCache({ stdTTL: 180 });
+const allStoresCache = new NodeCache({ stdTTL: 15 });
 
 const stat = promisify(fs.stat);
 const readdir = promisify(fs.readdir);
