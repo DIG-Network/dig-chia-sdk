@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.162](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.161...v0.0.1-alpha.162) (2024-10-07)
+
+
+### Features
+
+* add stun ip lookup ([fe17eaa](https://github.com/DIG-Network/dig-chia-sdk/commit/fe17eaa05aa4a6721dc6525f027d22a666f87a33))
+
 ### [0.0.1-alpha.161](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.160...v0.0.1-alpha.161) (2024-10-07)
 
 
