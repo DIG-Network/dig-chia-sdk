@@ -4,6 +4,10 @@ import { URL } from "url";
 import { Readable } from "stream";
 import { getOrCreateSSLCerts } from "../utils/ssl";
 import { formatHost } from "../utils/network";
+import NodeCache from "node-cache";
+
+const hasRootHashCache = new NodeCache({ stdTTL: 86400 });
+const wellKnownCache = new NodeCache({ stdTTL: 86400 });
 
 export class ContentServer {
   private ipAddress: string;
@@ -30,7 +34,9 @@ export class ContentServer {
     challengeHex?: string
   ): Promise<string> {
     // Construct the base URL
-    let url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
+    let url = `https://${formatHost(this.ipAddress)}:${
+      ContentServer.port
+    }/chia.${this.storeId}.${rootHash}/${key}`;
 
     // If a challenge is provided, append it as a query parameter
     if (challengeHex) {
@@ -40,13 +46,12 @@ export class ContentServer {
     return this.fetchWithRetries(url);
   }
 
-   // New method to get only the first chunk of the content
-   public async getKeyChunk(
-    key: string,
-    rootHash: string,
-  ): Promise<Buffer> {
+  // New method to get only the first chunk of the content
+  public async getKeyChunk(key: string, rootHash: string): Promise<Buffer> {
     // Construct the base URL
-    let url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/chia.${this.storeId}.${rootHash}/${key}`;
+    let url = `https://${formatHost(this.ipAddress)}:${
+      ContentServer.port
+    }/chia.${this.storeId}.${rootHash}/${key}`;
     return this.fetchFirstChunk(url);
   }
 
@@ -65,15 +70,44 @@ export class ContentServer {
     }
   }
 
-  // Method to get the .well-known information
+  /**
+   * Fetches and caches the .well-known information for the store's IP address.
+   *
+   * @returns A promise that resolves to the .well-known JSON data.
+   */
   public async getWellKnown(): Promise<any> {
-    const url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/.well-known`;
-    return this.fetchJson(url);
+    // Construct the cache key based on ipAddress
+    const cacheKey = `${this.ipAddress}-wellknown`;
+
+    // Check if the result is already cached
+    const cachedResult = wellKnownCache.get<any>(cacheKey);
+    if (cachedResult !== undefined) {
+      return cachedResult;
+    }
+
+    // If not cached, proceed to fetch the .well-known information
+    const url = `https://${formatHost(this.ipAddress)}:${
+      ContentServer.port
+    }/.well-known`;
+
+    try {
+      const data = await this.fetchJson(url);
+      wellKnownCache.set(cacheKey, data);
+      return data;
+    } catch (error: any) {
+      console.error(
+        `Error fetching .well-known information for ${this.ipAddress}:`,
+        error.message
+      );
+      throw error; // Propagate the error after logging
+    }
   }
 
   // Method to get the list of known stores
   public async getKnownStores(): Promise<any> {
-    const url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/.well-known/stores`;
+    const url = `https://${formatHost(this.ipAddress)}:${
+      ContentServer.port
+    }/.well-known/stores`;
     return this.fetchJson(url);
   }
 
@@ -85,14 +119,23 @@ export class ContentServer {
 
   // Method to get the index of keys in a store
   public async getKeysIndex(rootHash?: string): Promise<any> {
-    let udi = `chia.${this.storeId}`;
+    try {
+      let udi = `chia.${this.storeId}`;
 
-    if (rootHash) {
-      udi += `.${rootHash}`;
+      if (rootHash) {
+        udi += `.${rootHash}`;
+      }
+
+      const url = `https://${formatHost(this.ipAddress)}:${
+        ContentServer.port
+      }/${udi}`;
+      return this.fetchJson(url);
+    } catch (error: any) {
+      if (rootHash) {
+        hasRootHashCache.del(`${this.storeId}-${rootHash}`);
+      }
+      throw error;
     }
-
-    const url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/${udi}`;
-    return this.fetchJson(url);
   }
 
   // Method to check if a specific key exists (HEAD request)
@@ -100,14 +143,23 @@ export class ContentServer {
     key: string,
     rootHash?: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
-    let udi = `chia.${this.storeId}`;
+    try {
+      let udi = `chia.${this.storeId}`;
 
-    if (rootHash) {
-      udi += `.${rootHash}`;
+      if (rootHash) {
+        udi += `.${rootHash}`;
+      }
+
+      const url = `https://${formatHost(this.ipAddress)}:${
+        ContentServer.port
+      }/${udi}/${key}`;
+      return this.head(url);
+    } catch (error: any) {
+      if (rootHash) {
+        hasRootHashCache.del(`${this.storeId}-${rootHash}`);
+      }
+      throw error;
     }
-
-    const url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/${udi}/${key}`;
-    return this.head(url);
   }
 
   // Method to check if a specific store exists (HEAD request)
@@ -115,23 +167,55 @@ export class ContentServer {
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
-    let url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/chia.${this.storeId}`;
+    try {
+      let url = `https://${formatHost(this.ipAddress)}:${
+        ContentServer.port
+      }/chia.${this.storeId}`;
 
-    if (options?.hasRootHash) {
-      url += `?hasRootHash=${options.hasRootHash}`;
+      if (options?.hasRootHash) {
+        url += `?hasRootHash=${options.hasRootHash}`;
+      }
+
+      return this.head(url);
+    } catch (error: any) {
+      if (options?.hasRootHash) {
+        hasRootHashCache.del(`${this.storeId}-${options.hasRootHash}`);
+      }
+      throw error;
     }
-
-    return this.head(url);
   }
 
+  /**
+   * Checks if the store has the specified rootHash.
+   * Utilizes caching to improve performance.
+   *
+   * @param rootHash - The root hash to check.
+   * @returns A promise that resolves to true if the root hash exists, otherwise false.
+   */
   public async hasRootHash(rootHash: string): Promise<boolean> {
+    // Construct the cache key using storeId and rootHash
+    const cacheKey = `${this.storeId}-${rootHash}`;
+
+    // Check if the result is already cached
+    const cachedResult = hasRootHashCache.get<boolean>(cacheKey);
+    if (cachedResult !== undefined) {
+      return cachedResult;
+    }
+
+    // If not cached, perform the headStore request
     const { success, headers } = await this.headStore({
       hasRootHash: rootHash,
     });
-    if (success) {
-      return headers?.["x-has-root-hash"] === "true";
+
+    // Determine if the store has the root hash
+    const hasHash = success && headers?.["x-has-root-hash"] === "true";
+
+    // Only cache the result if the store has the root hash
+    if (hasHash) {
+      hasRootHashCache.set(cacheKey, true);
     }
-    return false;
+
+    return hasHash;
   }
 
   public streamKey(key: string, rootHash?: string): Promise<Readable> {
@@ -142,7 +226,9 @@ export class ContentServer {
     }
 
     return new Promise((resolve, reject) => {
-      const url = `https://${formatHost(this.ipAddress)}:${ContentServer.port}/${udi}/${key}`;
+      const url = `https://${formatHost(this.ipAddress)}:${
+        ContentServer.port
+      }/${udi}/${key}`;
       const urlObj = new URL(url);
 
       const requestOptions = {
@@ -164,6 +250,7 @@ export class ContentServer {
             reject(new Error("Redirected without a location header"));
           }
         } else {
+          hasRootHashCache.del(`${this.storeId}-${rootHash}`);
           reject(
             new Error(
               `Failed to retrieve data from ${url}. Status code: ${response.statusCode}`
@@ -483,13 +570,14 @@ export class ContentServer {
           response.headers.location
         ) {
           // Handle redirects
-          const redirectUrl = new URL(response.headers.location, url).toString(); // Resolve relative URLs
+          const redirectUrl = new URL(
+            response.headers.location,
+            url
+          ).toString(); // Resolve relative URLs
           if (timeout) {
             clearTimeout(timeout);
           }
-          this.fetchFirstChunk(redirectUrl)
-            .then(resolve)
-            .catch(reject);
+          this.fetchFirstChunk(redirectUrl).then(resolve).catch(reject);
         } else {
           if (timeout) {
             clearTimeout(timeout);

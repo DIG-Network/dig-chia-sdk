@@ -109,7 +109,6 @@ export class PeerRanker {
   private async measureBandwidth(ip: string): Promise<number> {
     const cachedMetrics = peerCache.get<PeerMetrics>(ip);
     if (cachedMetrics && cachedMetrics.bandwidth) {
-      console.log(`Bandwidth for IP ${ip} retrieved from cache.`);
       return cachedMetrics.bandwidth;
     }
 
