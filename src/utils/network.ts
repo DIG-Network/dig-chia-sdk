@@ -1,35 +1,70 @@
-// @ts-ignore
-import stun, { STUN_BINDING_REQUEST } from 'node-stun';
+import superagent from "superagent";
+import { Environment } from "./Environment";
 
-// Get the Coturn server hostname from the environment variable or default to "localhost"
-const COTURN_SERVER = process.env.STUN_SERVER || 'coturn';  // "coturn" refers to the Coturn service in Docker Compose
-const COTURN_PORT = 3478;  // Standard STUN port
+const MAX_RETRIES = 5;
+const RETRY_DELAY = 2000; // in milliseconds
 
+// Regular expression for validating both IPv4 and IPv6 addresses
+const ipv4Regex =
+  /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+const ipv6Regex =
+  /^(([0-9a-fA-F]{1,4}:){7}([0-9a-fA-F]{1,4}|:)|(([0-9a-fA-F]{1,7}|:):){1,7}([0-9a-fA-F]{1,4}|:))$/;
+
+// Regular expression for validating hostnames
+const hostnameRegex = /^(([a-zA-Z0-9](-*[a-zA-Z0-9])*)\.)*[a-zA-Z]{2,}$/;
+
+// Helper function to validate the IP address or hostname
+const isValidHost = (host: string): boolean => {
+  return ipv4Regex.test(host) || ipv6Regex.test(host) || hostnameRegex.test(host);
+};
 
 export const getPublicHost = async (): Promise<string | undefined> => {
-  return new Promise((resolve, reject) => {
-    const client = stun.createClient();
+  const publicHost = process.env.PUBLIC_IP;
 
-    client.request(
-      COTURN_SERVER,
-      COTURN_PORT,
-      { request: STUN_BINDING_REQUEST },
-      (err: any, response: any) => {
-        if (err) {
-          reject(`Failed to connect to Coturn server: ${err.message}`);
-          return;
-        }
+  if (publicHost) {
+    console.log("Public IP/Hostname from env:", publicHost);
 
-        // Extract public IP and port from the STUN response
-        const { address, port } = response.getXorAddress();
-        if (address && port) {
-          resolve(address);
-        } else {
-          reject('Failed to obtain public IP from Coturn server');
+    if (isValidHost(publicHost)) {
+      return publicHost;
+    }
+
+    console.error("Invalid public IP/Hostname in environment variable");
+    return undefined;
+  }
+
+  let attempt = 0;
+
+  while (attempt < MAX_RETRIES) {
+    try {
+      const response = await superagent.get(
+        "https://api.datalayer.storage/user/v1/get_user_ip"
+      );
+
+      if (response.body && response.body.success) {
+        const ipAddress = response.body.ip_address;
+
+        if (isValidHost(ipAddress)) {
+          return ipAddress;
         }
+        throw new Error("Invalid IP address or hostname format received");
       }
-    );
-  });
+      throw new Error("Failed to retrieve public host");
+    } catch (error: any) {
+      attempt++;
+      console.error(
+        `Error fetching public host (Attempt ${attempt}):`,
+        error.message
+      );
+
+      if (attempt >= MAX_RETRIES) {
+        throw new Error(
+          "Could not retrieve public host after several attempts"
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY));
+    }
+  }
 };
 
 
