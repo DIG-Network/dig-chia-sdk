@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.156](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.155...v0.0.1-alpha.156) (2024-10-07)
+
+
+### Features
+
+* additional caching measure to optimize requests ([e2519b1](https://github.com/DIG-Network/dig-chia-sdk/commit/e2519b1cb9fed7889b0026079cfeb3e86c72c363))
+
 ### [0.0.1-alpha.155](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.154...v0.0.1-alpha.155) (2024-10-06)
 
 
