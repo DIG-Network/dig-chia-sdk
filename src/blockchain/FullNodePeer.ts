@@ -45,7 +45,7 @@ export class FullNodePeer {
   private static cooldownCache = new NodeCache({ stdTTL: COOLDOWN_DURATION / 1000 });
 
   // Failed DNS hosts cooldown cache
-  private static failedDNSCache = new NodeCache({ stdTTL: COOLDOWN_DURATION / 1000 });
+  private static failedDNSCache = new NodeCache({ stdTTL: 86400 });
 
   // Peer reliability weights
   private static peerWeights: Map<string, number> = new Map();
