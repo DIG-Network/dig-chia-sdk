@@ -105,11 +105,9 @@ export class PropagationServer {
 
       try {
         const response = await axios.get(url, config);
-        console.log(green(`✔ Successfully pinged peer: ${this.ipAddress}`));
 
         return response.data;
       } catch (error: any) {
-        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
         console.error(red(error.message));
         throw error;
       }
@@ -164,7 +162,7 @@ export class PropagationServer {
 
         return response.data;
       } catch (error: any) {
-        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`));
+        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`), error.message);
         console.error(red(error.message));
         throw error;
       }
