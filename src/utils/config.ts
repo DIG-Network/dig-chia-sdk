@@ -81,7 +81,7 @@ export const getCoinState = (
     description: string;
   };
 } => {
-  const stateFile = path.join(STORE_PATH, `${storeId}.json`);
+  const stateFile = path.join(USER_DIR_PATH, `${storeId}.json`);
   if (!fs.existsSync(stateFile)) {
     return {
       metadata: { rootHash: "", bytes: "", label: "", description: "" },
