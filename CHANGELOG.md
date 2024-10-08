@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.165](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.164...v0.0.1-alpha.165) (2024-10-08)
+
+
+### Features
+
+* cache DNS hosts with fullnode peers ([2b26c03](https://github.com/DIG-Network/dig-chia-sdk/commit/2b26c030d35e7239236f4d9f36307714788302aa))
+
 ### [0.0.1-alpha.164](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.163...v0.0.1-alpha.164) (2024-10-07)
 
 ### [0.0.1-alpha.163](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.162...v0.0.1-alpha.163) (2024-10-07)
