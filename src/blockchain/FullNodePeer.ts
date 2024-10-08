@@ -293,10 +293,7 @@ export class FullNodePeer {
   private static initializePeerWeights(peerIPs: string[]): void {
     for (const ip of peerIPs) {
       if (!FullNodePeer.peerWeights.has(ip)) {
-        if (
-          ip === LOCALHOST ||
-          ip === FullNodePeer.getTrustedFullNode()
-        ) {
+        if (ip === LOCALHOST || ip === FullNodePeer.getTrustedFullNode()) {
           FullNodePeer.peerWeights.set(ip, 5); // Higher weight for prioritized peers
         } else {
           FullNodePeer.peerWeights.set(ip, 1); // Default weight
@@ -518,40 +515,19 @@ export class FullNodePeer {
     parentCoinInfo: Buffer
   ): Promise<boolean> {
     const spinner = createSpinner("Waiting for confirmation...").start();
-    let peer: Peer;
-
-    try {
-      peer = await FullNodePeer.connect();
-    } catch (error: any) {
-      spinner.error({ text: "Failed to connect to a fullnode peer." });
-      console.error(`waitForConfirmation connection error: ${error.message}`);
-      throw error;
-    }
-
-    // Extract peer IP to access the corresponding limiter
-    const peerIP = FullNodePeer.extractPeerIP(peer);
-    if (!peerIP) {
-      spinner.error({ text: "Failed to extract fullnode peer IP." });
-      throw new Error("Failed to extract peer IP.");
-    }
+    const peer = await FullNodePeer.connect();
 
     try {
       while (true) {
         // Schedule the isCoinSpent method call through the limiter
 
-        const confirmed = await peer.isCoinSpent(
+        await peer.waitForCoinToBeSpent(
           parentCoinInfo,
           MIN_HEIGHT,
           Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
         );
 
-        if (confirmed) {
-          spinner.success({ text: "Coin confirmed!" });
-          return true;
-        }
-
-        // Wait for 5 seconds before the next check
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        spinner.success({ text: "Coin confirmed!" });
       }
     } catch (error: any) {
       spinner.error({ text: "Error while waiting for confirmation." });
