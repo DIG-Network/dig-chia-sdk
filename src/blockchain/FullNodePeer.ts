@@ -518,17 +518,14 @@ export class FullNodePeer {
     const peer = await FullNodePeer.connect();
 
     try {
-      while (true) {
-        // Schedule the isCoinSpent method call through the limiter
+      await peer.waitForCoinToBeSpent(
+        parentCoinInfo,
+        MIN_HEIGHT,
+        Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+      );
 
-        await peer.waitForCoinToBeSpent(
-          parentCoinInfo,
-          MIN_HEIGHT,
-          Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-        );
-
-        spinner.success({ text: "Coin confirmed!" });
-      }
+      spinner.success({ text: "Coin confirmed!" });
+      return true;
     } catch (error: any) {
       spinner.error({ text: "Error while waiting for confirmation." });
       console.error(`waitForConfirmation error: ${error.message}`);
