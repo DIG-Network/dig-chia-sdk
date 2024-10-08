@@ -12,7 +12,6 @@ import Bottleneck from "bottleneck";
 
 const FULLNODE_PORT = 8444;
 const LOCALHOST = "127.0.0.1";
-const CHIA_NODES_HOST = "chia-nodes";
 const DNS_HOSTS = [
   "dns-introducer.chia.net",
   "chia.ctrlaltdel.ch",
@@ -42,7 +41,9 @@ export class FullNodePeer {
   private static instance: FullNodePeer | null = null;
 
   // Cooldown cache to exclude faulty peers temporarily
-  private static cooldownCache = new NodeCache({ stdTTL: COOLDOWN_DURATION / 1000 });
+  private static cooldownCache = new NodeCache({
+    stdTTL: COOLDOWN_DURATION / 1000,
+  });
 
   // Failed DNS hosts cooldown cache
   private static failedDNSCache = new NodeCache({ stdTTL: 86400 });
@@ -58,6 +59,12 @@ export class FullNodePeer {
 
   // Cache for fetched peer IPs
   private static peerIPCache = new NodeCache({ stdTTL: CACHE_DURATION / 1000 });
+
+  // Cache for DNS_HOST resolved IPs with a TTL of 3 days (259200 seconds)
+  private static dnsCache = new NodeCache({
+    stdTTL: 259200,
+    checkperiod: 3600,
+  });
 
   // Map to store rate limiters per peer IP
   private static peerLimiters: Map<string, Bottleneck> = new Map();
@@ -171,7 +178,7 @@ export class FullNodePeer {
     const priorityIps: string[] = [];
 
     // Define prioritized peers
-    FullNodePeer.prioritizedPeers = [CHIA_NODES_HOST, LOCALHOST];
+    FullNodePeer.prioritizedPeers = [LOCALHOST];
 
     // Add trustedNodeIp if available
     if (trustedNodeIp) {
@@ -195,14 +202,6 @@ export class FullNodePeer {
       priorityIps.push(LOCALHOST);
     }
 
-    // Prioritize CHIA_NODES_HOST
-    if (
-      !FullNodePeer.cooldownCache.has(CHIA_NODES_HOST) &&
-      (await FullNodePeer.isPortReachable(CHIA_NODES_HOST, FULLNODE_PORT))
-    ) {
-      priorityIps.push(CHIA_NODES_HOST);
-    }
-
     if (priorityIps.length > 0) {
       return priorityIps;
     }
@@ -218,19 +217,31 @@ export class FullNodePeer {
     for (const DNS_HOST of DNS_HOSTS) {
       // Check if DNS_HOST is in failedDNSCache
       if (FullNodePeer.failedDNSCache.has(DNS_HOST)) {
-        console.warn(`Skipping DNS host ${DNS_HOST} due to recent failure.`);
         continue;
       }
 
       try {
-        const ips = await resolve4(DNS_HOST);
-        if (ips && ips.length > 0) {
+        let ips: string[] = [];
+
+        // Check if DNS_HOST's IPs are cached
+        if (FullNodePeer.dnsCache.has(DNS_HOST)) {
+          ips = FullNodePeer.dnsCache.get<string[]>(DNS_HOST) || [];
+        } else {
+          // Resolve DNS_HOST and cache the results
+          ips = await resolve4(DNS_HOST);
+          if (ips && ips.length > 0) {
+            FullNodePeer.dnsCache.set(DNS_HOST, ips);
+          }
+        }
+
+        if (ips.length > 0) {
           const shuffledIps = FullNodePeer.shuffleArray(ips);
           const reachableIps: string[] = [];
 
           for (const ip of shuffledIps) {
             if (
               !FullNodePeer.cooldownCache.has(ip) &&
+              FullNodePeer.isValidIpAddress(ip) &&
               (await FullNodePeer.isPortReachable(ip, FULLNODE_PORT))
             ) {
               reachableIps.push(ip);
@@ -243,13 +254,15 @@ export class FullNodePeer {
           }
         }
       } catch (error: any) {
-        console.error(`Failed to resolve IPs from ${DNS_HOST}: ${error.message}`);
+        console.error(
+          `Failed to resolve IPs from ${DNS_HOST}: ${error.message}`
+        );
         // Add DNS_HOST to failedDNSCache for cooldown
         FullNodePeer.failedDNSCache.set(DNS_HOST, true);
       }
     }
 
-    // Cache the fetched peer IPs
+    // Cache the fetched peer IPs if any
     if (fetchedPeers.length > 0) {
       FullNodePeer.peerIPCache.set("peerIPs", fetchedPeers);
       return fetchedPeers;
@@ -281,7 +294,6 @@ export class FullNodePeer {
     for (const ip of peerIPs) {
       if (!FullNodePeer.peerWeights.has(ip)) {
         if (
-          ip === CHIA_NODES_HOST ||
           ip === LOCALHOST ||
           ip === FullNodePeer.getTrustedFullNode()
         ) {
@@ -417,7 +429,9 @@ export class FullNodePeer {
             const timeoutPromise = new Promise<null>((_, reject) => {
               timeoutId = setTimeout(() => {
                 reject(
-                  new Error("Operation timed out. Reconnecting to a new fullnode peer.")
+                  new Error(
+                    "Operation timed out. Reconnecting to a new fullnode peer."
+                  )
                 );
               }, 60000); // 1 minute
             });
@@ -476,7 +490,9 @@ export class FullNodePeer {
     // Remove the limiter
     FullNodePeer.peerLimiters.delete(peerIP);
 
-    console.warn(`Fullnode Peer ${peerIP} has been marked as disconnected and is in cooldown.`);
+    console.warn(
+      `Fullnode Peer ${peerIP} has been marked as disconnected and is in cooldown.`
+    );
   }
 
   /**
@@ -519,21 +535,14 @@ export class FullNodePeer {
       throw new Error("Failed to extract peer IP.");
     }
 
-    const limiter = FullNodePeer.peerLimiters.get(peerIP);
-    if (!limiter) {
-      spinner.error({ text: "No rate limiter found for the fullnode peer." });
-      throw new Error("No rate limiter found for the peer.");
-    }
-
     try {
       while (true) {
         // Schedule the isCoinSpent method call through the limiter
-        const confirmed = await limiter.schedule(() =>
-          peer.isCoinSpent(
-            parentCoinInfo,
-            MIN_HEIGHT,
-            Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-          )
+
+        const confirmed = await peer.isCoinSpent(
+          parentCoinInfo,
+          MIN_HEIGHT,
+          Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
         );
 
         if (confirmed) {
