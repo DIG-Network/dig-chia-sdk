@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.166](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.165...v0.0.1-alpha.166) (2024-10-08)
+
+
+### Bug Fixes
+
+* get coin state to the right folder ([050586c](https://github.com/DIG-Network/dig-chia-sdk/commit/050586cd1d25f4ce0ce98128f519e390303834ee))
+* wait for confirmation ([dc704ad](https://github.com/DIG-Network/dig-chia-sdk/commit/dc704ad32390de2a9252206b4a6dc38e110319dc))
+
 ### [0.0.1-alpha.165](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.164...v0.0.1-alpha.165) (2024-10-08)
 
 
