@@ -164,12 +164,17 @@ export class DigPeer {
     return transformedBuffer;
   }
 
-  public async syncStore(): Promise<void> {
+  public async syncStore(order: "asc" | "desc" = "desc"): Promise<void> {
+    console.log('!');
     const dataStore = DataStore.from(this.storeId);
     const rootHistory = await dataStore.getRootHistory();
-    const localRootHistory = rootHistory
+    let localRootHistory = rootHistory
       .filter((root) => Boolean(root.synced))
       .reverse();
+
+    if (order === "asc") {
+      localRootHistory = localRootHistory.reverse();
+    }
 
     console.log(`Syncing store ${this.storeId} with ${this.IpAddress}`);
 
