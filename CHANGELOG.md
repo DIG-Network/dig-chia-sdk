@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.168](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.167...v0.0.1-alpha.168) (2024-10-10)
+
+
+### Bug Fixes
+
+* waitForConfirmation fix ([829f5cc](https://github.com/DIG-Network/dig-chia-sdk/commit/829f5cc91e69d0cface3a70d11aacb23e689469f))
+
 ### [0.0.1-alpha.167](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.166...v0.0.1-alpha.167) (2024-10-08)
 
 
