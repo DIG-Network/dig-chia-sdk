@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.170](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.169...v0.0.1-alpha.170) (2024-10-10)
+
+
+### Features
+
+* add options to sync store ([6fc808e](https://github.com/DIG-Network/dig-chia-sdk/commit/6fc808ecc7a316ecb56913e0b161f2fe14b9dd68))
+
 ### [0.0.1-alpha.169](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.168...v0.0.1-alpha.169) (2024-10-10)
 
 
