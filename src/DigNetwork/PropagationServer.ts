@@ -225,7 +225,7 @@ export class PropagationServer {
 
     // If not cached, proceed with the HTTP request
     const spinner = createSpinner(
-      `Checking if store ${this.storeId} exists...`
+      `Checking if store ${this.storeId} exists on peer: ${this.ipAddress}`
     ).start();
 
     try {

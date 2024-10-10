@@ -307,16 +307,25 @@ export class FullNodePeer {
    * @returns {string} The selected peer IP.
    */
   private static selectPeerRoundRobin(): string {
-    const peers = Array.from(FullNodePeer.peerWeights.keys()).filter(
-      (ip) => !FullNodePeer.cooldownCache.has(ip)
+    const availablePrioritizedPeers = FullNodePeer.prioritizedPeers.filter(
+      (ip) => !FullNodePeer.cooldownCache.has(ip) && FullNodePeer.peerWeights.has(ip)
     );
-
-    if (peers.length === 0) {
-      throw new Error("All fullnode peers are in cooldown.");
+  
+    if (availablePrioritizedPeers.length > 0) {
+      // Select the first available prioritized peer
+      return availablePrioritizedPeers[0];
     }
-
-    // Round-robin selection
-    const selectedPeer = peers[FullNodePeer.roundRobinIndex % peers.length];
+  
+    // If no prioritized peers are available, proceed with round-robin among other peers
+    const regularPeers = Array.from(FullNodePeer.peerWeights.keys()).filter(
+      (ip) => !FullNodePeer.prioritizedPeers.includes(ip) && !FullNodePeer.cooldownCache.has(ip)
+    );
+  
+    if (regularPeers.length === 0) {
+      throw new Error("No available peers to connect.");
+    }
+  
+    const selectedPeer = regularPeers[FullNodePeer.roundRobinIndex % regularPeers.length];
     FullNodePeer.roundRobinIndex += 1;
     return selectedPeer;
   }
@@ -447,12 +456,14 @@ export class FullNodePeer {
 
               return result;
             } catch (error: any) {
+              FullNodePeer.handlePeerDisconnection(peerIP);
+              
               // If the error is WebSocket-related or timeout, reset the peer
               if (
                 error.message.includes("WebSocket") ||
                 error.message.includes("Operation timed out")
               ) {
-                FullNodePeer.handlePeerDisconnection(peerIP);
+                
                 const newPeer = await this.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
@@ -486,10 +497,6 @@ export class FullNodePeer {
 
     // Remove the limiter
     FullNodePeer.peerLimiters.delete(peerIP);
-
-    console.warn(
-      `Fullnode Peer ${peerIP} has been marked as disconnected and is in cooldown.`
-    );
   }
 
   /**
@@ -516,20 +523,25 @@ export class FullNodePeer {
   ): Promise<boolean> {
     const spinner = createSpinner("Waiting for confirmation...").start();
     const peer = await FullNodePeer.connect();
+    while (true) {
+      try {
+        await peer.waitForCoinToBeSpent(
+          parentCoinInfo,
+          MIN_HEIGHT,
+          Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
+        );
 
-    try {
-      await peer.waitForCoinToBeSpent(
-        parentCoinInfo,
-        MIN_HEIGHT,
-        Buffer.from(MIN_HEIGHT_HEADER_HASH, "hex")
-      );
-
-      spinner.success({ text: "Coin confirmed!" });
-      return true;
-    } catch (error: any) {
-      spinner.error({ text: "Error while waiting for confirmation." });
-      console.error(`waitForConfirmation error: ${error.message}`);
-      throw error;
+        spinner.success({ text: "Coin confirmed!" });
+        return true;
+      } catch (error: any) {
+        if (error.message.includes("UnknownCoin")) {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } else {
+          spinner.error({ text: "Error while waiting for confirmation." });
+          console.error(`waitForConfirmation error: ${error.message}`);
+          throw error;
+        }
+      }
     }
   }
 }

@@ -105,3 +105,88 @@ export const calculateFolderSize = (folderPath: string): bigint => {
 
   return totalSize;
 };
+
+/**
+ * Represents the result of listing files.
+ * - If `groupSize` is not provided, returns an array of relative file paths.
+ * - If `groupSize` is provided, returns an array of arrays, each containing up to `groupSize` file paths.
+ */
+type ListFilesResult = string[] | string[][];
+
+/**
+ * Recursively lists all files in a directory, excluding specified folders and respecting `.gitignore` rules.
+ * Optionally groups the list into batches of a specified size.
+ * 
+ * @param {string} baseDir - The base directory path to start listing files from.
+ * @param {number} [groupSize] - Optional. The number of files per group. If provided, the result will be an array of arrays.
+ * @returns {ListFilesResult} - A flat list of relative file paths or grouped lists based on `groupSize`.
+ */
+function listFilesRecursively(
+  baseDir: string,
+  groupSize?: number
+): ListFilesResult {
+  // Initialize the ignore instance
+  const ig = ignore();
+
+  // Path to .gitignore
+  const gitignorePath = path.join(baseDir, ".gitignore");
+
+  // Load and parse .gitignore if it exists
+  if (fs.existsSync(gitignorePath)) {
+    const gitignoreContent = fs.readFileSync(gitignorePath, "utf-8");
+    ig.add(gitignoreContent);
+  }
+
+  // Initialize result containers
+  const allFiles: string[] = [];
+  let groupedFiles: string[][] = [];
+
+  /**
+   * Recursively traverses directories to collect files.
+   * 
+   * @param {string} currentDir - The current directory path being traversed.
+   */
+  function traverseDirectory(currentDir: string): void {
+    let entries: fs.Dirent[];
+
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch (err) {
+      console.error(`Failed to read directory: ${currentDir}. Error: ${(err as Error).message}`);
+      return;
+    }
+
+    for (const entry of entries) {
+      const entryName = entry.name;
+      const fullPath = path.join(currentDir, entryName);
+      const relativePath = path.relative(baseDir, fullPath).replace(/\\/g, "/"); // Normalize to forward slashes
+
+      // Skip .git and .dig directories and any ignored paths
+      if (entryName === ".git" || entryName === ".dig" || ig.ignores(relativePath)) {
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        traverseDirectory(fullPath); // Recurse into subdirectory
+      } else if (entry.isFile()) {
+        allFiles.push(relativePath);
+      }
+      // Optionally handle symbolic links or other types if needed
+    }
+  }
+
+  // Start traversal from the base directory
+  traverseDirectory(baseDir);
+
+  // If groupSize is provided and valid, group the files accordingly
+  if (groupSize && Number.isInteger(groupSize) && groupSize > 0) {
+    groupedFiles = [];
+    for (let i = 0; i < allFiles.length; i += groupSize) {
+      groupedFiles.push(allFiles.slice(i, i + groupSize));
+    }
+    return groupedFiles;
+  }
+
+  // Return the flat list of files if grouping is not required
+  return allFiles;
+}
