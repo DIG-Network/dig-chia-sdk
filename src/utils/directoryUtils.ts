@@ -121,7 +121,7 @@ type ListFilesResult = string[] | string[][];
  * @param {number} [groupSize] - Optional. The number of files per group. If provided, the result will be an array of arrays.
  * @returns {ListFilesResult} - A flat list of relative file paths or grouped lists based on `groupSize`.
  */
-function listFilesRecursively(
+export function listFilesRecursively(
   baseDir: string,
   groupSize?: number
 ): ListFilesResult {

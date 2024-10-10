@@ -295,9 +295,6 @@ export class StoreMonitorRegistry {
   private async fetchAndCacheStoreInfo(
     storeId: string
   ): Promise<StoreCacheEntry> {
-    console.log(
-      `Monitor: Fetching and caching latest store info for storeId: ${storeId}`
-    );
 
     const peer = await FullNodePeer.connect();
     const dataStore = DataStore.from(storeId);
@@ -305,9 +302,6 @@ export class StoreMonitorRegistry {
       await dataStore.getCreationHeight();
 
     // Sync store from the peer using launcher ID
-    console.log(
-      `Monitor: Syncing store from launcher ID for storeId: ${storeId}`
-    );
     const { latestStore, latestHeight } = await peer.syncStoreFromLauncherId(
       Buffer.from(storeId, "hex"),
       createdAtHeight,
@@ -324,7 +318,6 @@ export class StoreMonitorRegistry {
       latestHash
     ).serialize();
 
-    console.log(`Monitor: Caching new store info for storeId: ${storeId}`);
     this.storeCoinCache.set(storeId, {
       latestStore: serializedLatestStore,
       latestHeight,
