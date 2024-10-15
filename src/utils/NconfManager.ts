@@ -1,10 +1,12 @@
 import nconf from "nconf";
 import fs from "fs-extra";
+import { Mutex } from 'async-mutex';
 import path from "path";
 import { USER_DIR_PATH } from "./config";
 import { Environment } from "./Environment";
 
 const CONF_FOLDER_PATH = Environment.DIG_FOLDER_PATH || USER_DIR_PATH;
+const fileMutex = new Mutex();
 
 export class NconfManager {
   private configFilePath: string;
@@ -14,7 +16,8 @@ export class NconfManager {
     this.initializeConfig();
   }
 
-  private async initializeConfig(): Promise<void> {
+private async initializeConfig(): Promise<void> {
+    const release = await fileMutex.acquire();
     const directory = path.dirname(this.configFilePath);
     if (!(await fs.pathExists(directory))) {
       await fs.mkdirp(directory);
@@ -22,8 +25,12 @@ export class NconfManager {
     }
 
     if (!(await fs.pathExists(this.configFilePath))) {
-      await fs.writeFile(this.configFilePath, "{}");
-      console.log("Configuration file created:", this.configFilePath);
+        try {
+            await fs.writeFile(this.configFilePath, "{}");
+            console.log("Configuration file created:", this.configFilePath);
+        } finally {
+            release();
+        }
     }
 
     nconf.file({ file: this.configFilePath });
