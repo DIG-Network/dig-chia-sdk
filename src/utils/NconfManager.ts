@@ -19,20 +19,19 @@ export class NconfManager {
 private async initializeConfig(): Promise<void> {
     const release = await fileMutex.acquire();
     const directory = path.dirname(this.configFilePath);
-    if (!(await fs.pathExists(directory))) {
-      await fs.mkdirp(directory);
-      console.log("Directory created:", directory);
-    }
+    try {
+        if (!(await fs.pathExists(directory))) {
+            await fs.mkdirp(directory);
+            console.log("Directory created:", directory);
+        }
 
-    if (!(await fs.pathExists(this.configFilePath))) {
-        try {
+        if (!(await fs.pathExists(this.configFilePath))) {
             await fs.writeFile(this.configFilePath, "{}");
             console.log("Configuration file created:", this.configFilePath);
-        } finally {
-            release();
         }
+    } finally {
+        release();
     }
-
     nconf.file({ file: this.configFilePath });
   }
 
