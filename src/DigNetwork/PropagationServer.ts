@@ -151,7 +151,7 @@ export class PropagationServer {
       try {
         const response = await axios.post(url, data, config);
         console.log(
-          green(`✔ Successfully pinged peer: ${this.ipAddress}`),
+          green(`✔ Successfully pinged peer: ${this.ipAddress} ${this.storeId}`),
           response.data
         );
 
