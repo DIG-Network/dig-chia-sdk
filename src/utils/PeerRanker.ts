@@ -1,12 +1,12 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import fs from 'fs';
 import https from 'https';
-import NodeCache from 'node-cache'; // Import node-cache
+import { DigCache } from './DigCache';
 import { getOrCreateSSLCerts } from './ssl';
 import { asyncPool } from './promiseUtils';
 
 // Cache with TTL of 1 day (86400 seconds)
-const peerCache = new NodeCache({ stdTTL: 86400 });
+const peerCache = new DigCache({ stdTTL: 86400 });
 
 export interface PeerMetrics {
   ip: string;
@@ -51,7 +51,7 @@ export class PeerRanker {
    * @returns Promise resolving to the latency in milliseconds or rejecting if the peer fails.
    */
   private async measureLatency(ip: string): Promise<number> {
-    const cachedMetrics = peerCache.get<PeerMetrics>(ip);
+    const cachedMetrics = await peerCache.get<PeerMetrics>(ip);
     if (cachedMetrics && cachedMetrics.latency) {
       return cachedMetrics.latency;
     }
@@ -107,7 +107,7 @@ export class PeerRanker {
    * @returns Promise resolving to the upload bandwidth in bytes per second or rejecting if the peer fails.
    */
   private async measureBandwidth(ip: string): Promise<number> {
-    const cachedMetrics = peerCache.get<PeerMetrics>(ip);
+    const cachedMetrics = await peerCache.get<PeerMetrics>(ip);
     if (cachedMetrics && cachedMetrics.bandwidth) {
       return cachedMetrics.bandwidth;
     }

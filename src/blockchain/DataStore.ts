@@ -35,13 +35,12 @@ import { CreateStoreUserInputs } from "../types";
 import { askForStoreDetails } from "../prompts";
 import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
-import NodeCache from "node-cache";
 import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
 import { StoreMonitorRegistry } from "./StoreMonitorRegistry";
+import { DigCache } from "../utils";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
-const rootHistoryCache = new NodeCache({ stdTTL: 180 });
-const allStoresCache = new NodeCache({ stdTTL: 15 });
+const rootHistoryCache = new DigCache({ stdTTL: 180 });
 
 const stat = promisify(fs.stat);
 const readdir = promisify(fs.readdir);
@@ -337,7 +336,7 @@ export class DataStore {
       const deserializedStore = DataStoreSerializer.deserialize({
         latestStore: cachedInfo.latestStore,
         latestHeight: cachedInfo.latestHeight.toString(),
-        latestHash: cachedInfo.latestHash
+        latestHash: cachedInfo.latestHash,
       });
 
       return {
@@ -419,7 +418,9 @@ export class DataStore {
     }
 
     // Check if the root history is cached for this storeId
-    const cachedHistory = rootHistoryCache.get<RootHistoryItem[]>(this.storeId);
+    const cachedHistory = await rootHistoryCache.get<RootHistoryItem[]>(
+      this.storeId
+    );
     if (cachedHistory) {
       return cachedHistory;
     }

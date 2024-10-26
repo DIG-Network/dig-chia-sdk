@@ -13,14 +13,12 @@ import { Wallet } from "./Wallet";
 import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
-import NodeCache from "node-cache";
-import { getPublicHost } from "../utils/network";
-import { Environment } from "../utils/Environment";
+import { getPublicHost, DigCache, Environment } from "../utils";
 
 const serverCoinCollateral = 300_000_000;
 
 // Initialize the cache with a TTL of 300 seconds (5 minutes)
-const serverCoinPeersCache = new NodeCache({ stdTTL: 300 });
+const serverCoinPeersCache = new DigCache({ stdTTL: 300 });
 
 export class ServerCoin {
   private storeId: string;
@@ -194,7 +192,7 @@ export class ServerCoin {
     const cacheKey = `serverCoinPeers-${this.storeId}-${epoch}`;
 
     // Check if the result is already cached
-    const cachedPeers = serverCoinPeersCache.get<string[]>(cacheKey);
+    const cachedPeers = await serverCoinPeersCache.get<string[]>(cacheKey);
     if (cachedPeers) {
       return cachedPeers;
     }
