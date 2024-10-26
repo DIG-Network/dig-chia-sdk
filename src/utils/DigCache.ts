@@ -9,7 +9,7 @@ export interface ICache {
   has(key: string): Promise<boolean>;
   flushAll(): Promise<boolean>;
   keys(pattern?: string): Promise<string[]>;
-  ttl(key: string): Promise<number>;
+  ttl(key: string, ttl?: number): Promise<boolean>;
   // Add other NodeCache methods as needed
 }
 
@@ -209,28 +209,28 @@ class DigCache implements ICache {
     }
   }
 
-  async ttl(key: string): Promise<number> {
+  async ttl(key: string, ttl?: number): Promise<boolean> {
     if (this.useRedis) {
       try {
-        const result = await (this.cache as RedisClientType).ttl(key);
-        return result; // TTL in seconds. -2: key does not exist, -1: no TTL
-      } catch (error) {
+        if (ttl === undefined || ttl === 0) {
+          return (await (this.cache as RedisClientType).del(key)) > 0;
+        } else {
+          return await (this.cache as RedisClientType).expire(key, ttl);
+        }
+      } catch (error: any) {
         console.error(`Redis ttl error for key "${key}":`, error);
-        return -2;
+        return false;
       }
     } else {
-      const ttlMs = (this.cache as NodeCache).getTtl(key);
-      
-      if (ttlMs === undefined || ttlMs === 0) {
-        return -1; // No TTL set
+      try {
+        if (ttl === undefined || ttl === 0) {
+          return (this.cache as NodeCache).del(key) > 0;
+        }
+        return (this.cache as NodeCache).ttl(key, ttl);
+      } catch (error: any) {
+        console.error(`NodeCache ttl error for key "${key}":`, error);
+        return false;
       }
-
-      if (ttlMs < 0) {
-        return ttlMs; // Key does not exist or other Redis-specific responses
-      }
-
-      const ttlSec = Math.floor((ttlMs - Date.now()) / 1000);
-      return ttlSec > 0 ? ttlSec : -2;
     }
   }
 
