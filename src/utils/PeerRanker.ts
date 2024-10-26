@@ -1,12 +1,12 @@
 import axios, { AxiosRequestConfig } from 'axios';
 import fs from 'fs';
 import https from 'https';
-import { DigCache } from './DigCache';
 import { getOrCreateSSLCerts } from './ssl';
 import { asyncPool } from './promiseUtils';
+import NodeCache from "node-cache";
 
 // Cache with TTL of 1 day (86400 seconds)
-const peerCache = new DigCache({ stdTTL: 86400 });
+const peerCache = new NodeCache({ stdTTL: 86400 });
 
 export interface PeerMetrics {
   ip: string;

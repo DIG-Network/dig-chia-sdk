@@ -37,10 +37,10 @@ import { FileCache } from "../utils/FileCache";
 import { DataStoreSerializer } from "./DataStoreSerializer";
 import { MAIN_NET_GENISES_CHALLENGE } from "../utils/config";
 import { StoreMonitorRegistry } from "./StoreMonitorRegistry";
-import { DigCache } from "../utils";
+import NodeCache from "node-cache";
 
 // Initialize the cache with a TTL of 180 seconds (3 minutes)
-const rootHistoryCache = new DigCache({ stdTTL: 180 });
+const rootHistoryCache = new NodeCache({ stdTTL: 180 });
 
 const stat = promisify(fs.stat);
 const readdir = promisify(fs.readdir);

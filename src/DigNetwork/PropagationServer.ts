@@ -18,11 +18,12 @@ import { PassThrough } from "stream";
 import { promptCredentials } from "../utils/credentialsUtils";
 import { STORE_PATH } from "../utils/config";
 import { Wallet, DataStore } from "../blockchain";
-import { formatHost, DigCache, getOrCreateSSLCerts } from "../utils";
+import { formatHost, getOrCreateSSLCerts } from "../utils";
+import NodeCache from "node-cache";
 
 // Initialize cache with a TTL of 1 week (604800 seconds)
-const storeExistsCache = new DigCache({ stdTTL: 86400 });
-const pingUpdatecache = new DigCache({ stdTTL: 86400 });
+const storeExistsCache = new NodeCache({ stdTTL: 86400 });
+const pingUpdatecache = new NodeCache({ stdTTL: 86400 });
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
