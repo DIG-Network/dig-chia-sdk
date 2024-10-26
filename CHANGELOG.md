@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.172](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.171...v0.0.1-alpha.172) (2024-10-26)
+
+
+### Bug Fixes
+
+* redis ttl ([70161fd](https://github.com/DIG-Network/dig-chia-sdk/commit/70161fd6a08550dcaf1a557fe1674b0ac4a90cd5))
+
 ### [0.0.1-alpha.171](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.170...v0.0.1-alpha.171) (2024-10-26)
 
 
