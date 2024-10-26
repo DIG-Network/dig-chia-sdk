@@ -1,6 +1,6 @@
 {
   "name": "@dignetwork/dig-sdk",
-  "version": "0.0.1-alpha.170",
+  "version": "0.0.1-alpha.172",
   "description": "",
   "type": "commonjs",
   "main": "./dist/index.js",
@@ -52,6 +52,7 @@
     "progress-stream": "^2.0.0",
     "proper-lockfile": "^4.1.2",
     "superagent": "^10.1.0",
+    "redis": "^4.7.0",
     "unzipper": "^0.12.3"
   },
   "devDependencies": {
