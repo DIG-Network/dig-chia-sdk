@@ -7,7 +7,7 @@ import net from "net";
 import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { Environment } from "../utils/Environment";
-import { DigCache } from "../utils";
+import NodeCache from "node-cache";
 import Bottleneck from "bottleneck";
 
 const FULLNODE_PORT = 8444;
@@ -41,12 +41,12 @@ export class FullNodePeer {
   private static instance: FullNodePeer | null = null;
 
   // Cooldown cache to exclude faulty peers temporarily
-  private static cooldownCache = new DigCache({
+  private static cooldownCache = new NodeCache({
     stdTTL: COOLDOWN_DURATION / 1000,
   });
 
   // Failed DNS hosts cooldown cache
-  private static failedDNSCache = new DigCache({ stdTTL: 86400 });
+  private static failedDNSCache = new NodeCache({ stdTTL: 86400 });
 
   // Peer reliability weights
   private static peerWeights: Map<string, number> = new Map();
@@ -58,10 +58,10 @@ export class FullNodePeer {
   private static peerInfos: Map<string, PeerInfo> = new Map();
 
   // Cache for fetched peer IPs
-  private static peerIPCache = new DigCache({ stdTTL: CACHE_DURATION / 1000 });
+  private static peerIPCache = new NodeCache({ stdTTL: CACHE_DURATION / 1000 });
 
   // Cache for DNS_HOST resolved IPs with a TTL of 3 days (259200 seconds)
-  private static dnsCache = new DigCache({
+  private static dnsCache = new NodeCache({
     stdTTL: 259200,
     checkperiod: 3600,
   });

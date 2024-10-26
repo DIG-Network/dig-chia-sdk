@@ -2,10 +2,11 @@ import fs from "fs";
 import http from "http";
 import { URL } from "url";
 import { Readable } from "stream";
-import { formatHost, DigCache, getOrCreateSSLCerts } from "../utils";
+import { formatHost, getOrCreateSSLCerts } from "../utils";
+import NodeCache from "node-cache";
 
-const hasRootHashCache = new DigCache({ stdTTL: 86400 });
-const wellKnownCache = new DigCache({ stdTTL: 86400 });
+const hasRootHashCache = new NodeCache({ stdTTL: 86400 });
+const wellKnownCache = new NodeCache({ stdTTL: 86400 });
 
 export class ContentServer {
   private ipAddress: string;

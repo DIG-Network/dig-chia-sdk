@@ -13,12 +13,13 @@ import { Wallet } from "./Wallet";
 import { NconfManager } from "../utils/NconfManager";
 import { CoinData, ServerCoinData } from "../types";
 import { DataStore } from "./DataStore";
-import { getPublicHost, DigCache, Environment } from "../utils";
+import { getPublicHost, Environment } from "../utils";
+import NodeCache from "node-cache";
 
 const serverCoinCollateral = 300_000_000;
 
 // Initialize the cache with a TTL of 300 seconds (5 minutes)
-const serverCoinPeersCache = new DigCache({ stdTTL: 300 });
+const serverCoinPeersCache = new NodeCache({ stdTTL: 300 });
 
 export class ServerCoin {
   private storeId: string;
