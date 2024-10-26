@@ -2,12 +2,10 @@ import fs from "fs";
 import http from "http";
 import { URL } from "url";
 import { Readable } from "stream";
-import { getOrCreateSSLCerts } from "../utils/ssl";
-import { formatHost } from "../utils/network";
-import NodeCache from "node-cache";
+import { formatHost, DigCache, getOrCreateSSLCerts } from "../utils";
 
-const hasRootHashCache = new NodeCache({ stdTTL: 86400 });
-const wellKnownCache = new NodeCache({ stdTTL: 86400 });
+const hasRootHashCache = new DigCache({ stdTTL: 86400 });
+const wellKnownCache = new DigCache({ stdTTL: 86400 });
 
 export class ContentServer {
   private ipAddress: string;
@@ -197,7 +195,7 @@ export class ContentServer {
     const cacheKey = `${this.storeId}-${rootHash}`;
 
     // Check if the result is already cached
-    const cachedResult = hasRootHashCache.get<boolean>(cacheKey);
+    const cachedResult = await hasRootHashCache.get<boolean>(cacheKey);
     if (cachedResult !== undefined) {
       return cachedResult;
     }

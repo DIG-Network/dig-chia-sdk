@@ -12,19 +12,17 @@ import * as zlib from "zlib";
 import { asyncPool } from "../utils/promiseUtils";
 import { createSpinner } from "nanospinner";
 import { getFilePathFromSha256 } from "../utils/hashUtils";
-import { getOrCreateSSLCerts } from "../utils/ssl";
 import { green, red, blue, yellow, cyan } from "colorette";
 import { merkleIntegrityCheck } from "../utils/merkle";
 import { PassThrough } from "stream";
 import { promptCredentials } from "../utils/credentialsUtils";
 import { STORE_PATH } from "../utils/config";
 import { Wallet, DataStore } from "../blockchain";
-import { formatHost } from "../utils/network";
-import NodeCache from "node-cache";
+import { formatHost, DigCache, getOrCreateSSLCerts } from "../utils";
 
 // Initialize cache with a TTL of 1 week (604800 seconds)
-const storeExistsCache = new NodeCache({ stdTTL: 86400 });
-const pingUpdatecache = new NodeCache({ stdTTL: 86400 });
+const storeExistsCache = new DigCache({ stdTTL: 86400 });
+const pingUpdatecache = new DigCache({ stdTTL: 86400 });
 
 // Helper function to trim long filenames with ellipsis and ensure consistent padding
 function formatFilename(filename: string | undefined, maxLength = 30): string {
@@ -125,7 +123,7 @@ export class PropagationServer {
     const cacheKey = `${this.ipAddress}-${this.storeId}-${rootHash}`;
 
     // Check if response for this combination is already cached
-    if (pingUpdatecache.get(cacheKey) === "successfully synced") {
+    if ((await pingUpdatecache.get(cacheKey)) === "successfully synced") {
       return;
     }
 
@@ -151,7 +149,9 @@ export class PropagationServer {
       try {
         const response = await axios.post(url, data, config);
         console.log(
-          green(`✔ Successfully pinged peer: ${this.ipAddress}`),
+          green(
+            `✔ Successfully pinged peer: ${this.ipAddress} ${this.storeId}`
+          ),
           response.data
         );
 
@@ -162,7 +162,10 @@ export class PropagationServer {
 
         return response.data;
       } catch (error: any) {
-        console.error(red(`✖ Failed to ping peer: ${this.ipAddress}`), error.message);
+        console.error(
+          red(`✖ Failed to ping peer: ${this.ipAddress}`),
+          error.message
+        );
         console.error(red(error.message));
         throw error;
       }
@@ -215,7 +218,7 @@ export class PropagationServer {
       : `${this.storeId}-nohash`;
 
     // Check if the result is already cached
-    const cachedResult = storeExistsCache.get<{
+    const cachedResult = await storeExistsCache.get<{
       storeExists: boolean;
       rootHashExists: boolean;
     }>(cacheKey);

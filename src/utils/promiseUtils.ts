@@ -51,3 +51,35 @@ export const withTimeout = <T>(
     ),
   ]);
 };
+
+/**
+ * Wraps a promise to execute a callback every 30 seconds while the promise is pending.
+ *
+ * @param {Promise<T>} promise - The promise to wrap.
+ * @param {() => void} callback - The callback function to call every 30 seconds.
+ * @returns {Promise<T>} - A new promise that resolves or rejects with the original promise's result.
+ */
+export const withIntervalCallback = <T>(
+  promise: Promise<T>,
+  callback: () => void
+): Promise<T> => {
+  const intervalTime = 30000; // 30 seconds in milliseconds
+
+  let intervalId: NodeJS.Timeout;
+
+  // Start the interval that calls the callback every 30 seconds
+  intervalId = setInterval(() => {
+    callback();
+  }, intervalTime);
+
+  // Return a new promise that clears the interval when the original promise settles
+  return promise
+    .then((result) => {
+      clearInterval(intervalId);
+      return result;
+    })
+    .catch((error) => {
+      clearInterval(intervalId);
+      throw error;
+    });
+};

@@ -7,7 +7,7 @@ import net from "net";
 import { createSpinner } from "nanospinner";
 import { MIN_HEIGHT, MIN_HEIGHT_HEADER_HASH } from "../utils/config";
 import { Environment } from "../utils/Environment";
-import NodeCache from "node-cache";
+import { DigCache } from "../utils";
 import Bottleneck from "bottleneck";
 
 const FULLNODE_PORT = 8444;
@@ -41,12 +41,12 @@ export class FullNodePeer {
   private static instance: FullNodePeer | null = null;
 
   // Cooldown cache to exclude faulty peers temporarily
-  private static cooldownCache = new NodeCache({
+  private static cooldownCache = new DigCache({
     stdTTL: COOLDOWN_DURATION / 1000,
   });
 
   // Failed DNS hosts cooldown cache
-  private static failedDNSCache = new NodeCache({ stdTTL: 86400 });
+  private static failedDNSCache = new DigCache({ stdTTL: 86400 });
 
   // Peer reliability weights
   private static peerWeights: Map<string, number> = new Map();
@@ -58,10 +58,10 @@ export class FullNodePeer {
   private static peerInfos: Map<string, PeerInfo> = new Map();
 
   // Cache for fetched peer IPs
-  private static peerIPCache = new NodeCache({ stdTTL: CACHE_DURATION / 1000 });
+  private static peerIPCache = new DigCache({ stdTTL: CACHE_DURATION / 1000 });
 
   // Cache for DNS_HOST resolved IPs with a TTL of 3 days (259200 seconds)
-  private static dnsCache = new NodeCache({
+  private static dnsCache = new DigCache({
     stdTTL: 259200,
     checkperiod: 3600,
   });
@@ -207,7 +207,9 @@ export class FullNodePeer {
     }
 
     // Check if cached peer IPs exist
-    const cachedPeerIPs = FullNodePeer.peerIPCache.get<string[]>("peerIPs");
+    const cachedPeerIPs = await FullNodePeer.peerIPCache.get<string[]>(
+      "peerIPs"
+    );
     if (cachedPeerIPs) {
       return cachedPeerIPs;
     }
@@ -216,7 +218,7 @@ export class FullNodePeer {
     const fetchedPeers: string[] = [];
     for (const DNS_HOST of DNS_HOSTS) {
       // Check if DNS_HOST is in failedDNSCache
-      if (FullNodePeer.failedDNSCache.has(DNS_HOST)) {
+      if (await FullNodePeer.failedDNSCache.has(DNS_HOST)) {
         continue;
       }
 
@@ -224,8 +226,8 @@ export class FullNodePeer {
         let ips: string[] = [];
 
         // Check if DNS_HOST's IPs are cached
-        if (FullNodePeer.dnsCache.has(DNS_HOST)) {
-          ips = FullNodePeer.dnsCache.get<string[]>(DNS_HOST) || [];
+        if (await FullNodePeer.dnsCache.has(DNS_HOST)) {
+          ips = (await FullNodePeer.dnsCache.get<string[]>(DNS_HOST)) || [];
         } else {
           // Resolve DNS_HOST and cache the results
           ips = await resolve4(DNS_HOST);
@@ -308,24 +310,28 @@ export class FullNodePeer {
    */
   private static selectPeerRoundRobin(): string {
     const availablePrioritizedPeers = FullNodePeer.prioritizedPeers.filter(
-      (ip) => !FullNodePeer.cooldownCache.has(ip) && FullNodePeer.peerWeights.has(ip)
+      (ip) =>
+        !FullNodePeer.cooldownCache.has(ip) && FullNodePeer.peerWeights.has(ip)
     );
-  
+
     if (availablePrioritizedPeers.length > 0) {
       // Select the first available prioritized peer
       return availablePrioritizedPeers[0];
     }
-  
+
     // If no prioritized peers are available, proceed with round-robin among other peers
     const regularPeers = Array.from(FullNodePeer.peerWeights.keys()).filter(
-      (ip) => !FullNodePeer.prioritizedPeers.includes(ip) && !FullNodePeer.cooldownCache.has(ip)
+      (ip) =>
+        !FullNodePeer.prioritizedPeers.includes(ip) &&
+        !FullNodePeer.cooldownCache.has(ip)
     );
-  
+
     if (regularPeers.length === 0) {
       throw new Error("No available peers to connect.");
     }
-  
-    const selectedPeer = regularPeers[FullNodePeer.roundRobinIndex % regularPeers.length];
+
+    const selectedPeer =
+      regularPeers[FullNodePeer.roundRobinIndex % regularPeers.length];
     FullNodePeer.roundRobinIndex += 1;
     return selectedPeer;
   }
@@ -457,13 +463,12 @@ export class FullNodePeer {
               return result;
             } catch (error: any) {
               FullNodePeer.handlePeerDisconnection(peerIP);
-              
+
               // If the error is WebSocket-related or timeout, reset the peer
               if (
                 error.message.includes("WebSocket") ||
                 error.message.includes("Operation timed out")
               ) {
-                
                 const newPeer = await this.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
