@@ -195,6 +195,7 @@ export class ServerCoin {
     // Check if the result is already cached
     const cachedPeers = await serverCoinPeersCache.get<string[]>(cacheKey);
     if (cachedPeers) {
+      console.log('Using cachedPeers')
       return cachedPeers;
     }
 
@@ -203,6 +204,7 @@ export class ServerCoin {
       BigInt(epoch)
     );
 
+    console.log('Calling FullNodePeer.connect...');
     const peer = await FullNodePeer.connect();
     const maxClvmCost = BigInt(11_000_000_000);
 
