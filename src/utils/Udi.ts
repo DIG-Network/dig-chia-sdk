@@ -1,4 +1,5 @@
 import * as urns from 'urns';
+import { createHash } from 'crypto';
 
 //
 // This class encapsulates the concept of a Universal Data Identifier (UDI) which is a
@@ -25,6 +26,9 @@ class Udi {
     static readonly namespace: string = `urn:${Udi.nid}`;
 
     constructor(chainName: string, storeId: string, rootHash: string | null = null, resourceKey: string | null = null) {
+        if (!storeId) {
+            throw new Error("storeId cannot be empty");
+        }
         this.chainName = chainName || "chia";
         this.storeId = storeId;
         this.rootHash = rootHash;
@@ -42,13 +46,13 @@ class Udi {
     static fromUrn(urn: string): Udi {
         const parsedUrn = urns.parseURN(urn);
         if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
-            throw new Error(`Invalid namespace: ${parsedUrn.nid}`);
+            throw new Error(`Invalid nid: ${parsedUrn.nid}`);
         }
 
         const parts = parsedUrn.nss.split(':');
         // at a minimum we need chain name and store id
         if (parts.length < 2) {
-            throw new Error(`Invalid URN format: ${parsedUrn.nss}`);
+            throw new Error(`Invalid UDI format: ${parsedUrn.nss}`);
         }
 
         // this is what a nss looks like
@@ -94,6 +98,16 @@ class Udi {
 
     toString(): string {
         return this.toUrn();
+    }
+
+    clone(): Udi {
+        return new Udi(this.chainName, this.storeId, this.rootHash, this.resourceKey);
+    }
+
+    hashCode(): string {
+        const hash = createHash('sha256');
+        hash.update(this.toUrn());
+        return hash.digest('hex');
     }
 }
 
