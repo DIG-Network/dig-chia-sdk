@@ -25,7 +25,7 @@ class Udi {
     static readonly namespace: string = `urn:${Udi.nid}`;
 
     constructor(chainName: string, storeId: string, rootHash: string | null = null, resourceKey: string | null = null) {
-        this.chainName = chainName ?? "chia";
+        this.chainName = chainName || "chia";
         this.storeId = storeId;
         this.rootHash = rootHash;
         this.resourceKey = resourceKey;
