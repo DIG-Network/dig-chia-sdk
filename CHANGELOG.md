@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.176](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.175...v0.0.1-alpha.176) (2024-10-30)
+
+### [0.0.1-alpha.175](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.174...v0.0.1-alpha.175) (2024-10-30)
+
+
+### Features
+
+* UDI class supports both base16 and base32 strings ([bd6d6da](https://github.com/DIG-Network/dig-chia-sdk/commit/bd6d6da48c263da07c1b5ff9964dd246dbfb08b9))
+
 ### [0.0.1-alpha.174](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.173...v0.0.1-alpha.174) (2024-10-26)
 
 ### [0.0.1-alpha.173](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.172...v0.0.1-alpha.173) (2024-10-26)
