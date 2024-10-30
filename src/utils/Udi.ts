@@ -31,7 +31,7 @@ class Udi {
         this.resourceKey = resourceKey;
     }
 
-    withRootHash(rootHash: string): Udi {
+    withRootHash(rootHash: string | null): Udi {
         return new Udi(this.chainName, this.storeId, rootHash, this.resourceKey);
     }
 
