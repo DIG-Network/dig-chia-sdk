@@ -14,3 +14,4 @@ export * from './Environment';
 export * from './promiseUtils';
 export * from './PeerRanker';
 export * from './DigCache';
+export * from './Udi';
