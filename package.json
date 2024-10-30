@@ -53,7 +53,8 @@
     "proper-lockfile": "^4.1.2",
     "redis": "^4.7.0",
     "superagent": "^10.0.0",
-    "unzipper": "^0.12.3"
+    "unzipper": "^0.12.3",
+    "urns": "^0.6.0"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.2",
