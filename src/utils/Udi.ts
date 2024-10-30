@@ -2,7 +2,7 @@ import * as urns from 'urns';
 
 //
 // This class encapsulates the concept of a Universal Data Identifier (UDI) which is a
-// standardized way to identify resources across the distributed DIG mesh netowrk.
+// standardized way to identify resources across the distributed DIG mesh network.
 // The UDI is a URN (Uniform Resource Name) that is used to identify resources
 // in the DIG network. The UDI is composed of the following parts:
 //   - Chain Name: The name of the blockchain network where the resource is stored.
@@ -31,11 +31,11 @@ class Udi {
         this.resourceKey = resourceKey;
     }
 
-    fromRootHash(rootHash: string): Udi {
+    withRootHash(rootHash: string): Udi {
         return new Udi(this.chainName, this.storeId, rootHash, this.resourceKey);
     }
 
-    fromResourceKey(resourceKey: string | null): Udi {
+    withResourceKey(resourceKey: string | null): Udi {
         return new Udi(this.chainName, this.storeId, this.rootHash, resourceKey);
     }
 

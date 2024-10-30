@@ -18,16 +18,16 @@ describe('Udi', () => {
         expect(udi.resourceKey).to.be.null;
     });
 
-    it('should create a new Udi with a different rootHash using fromRootHash', () => {
+    it('should create a new Udi with a different rootHash using withRootHash', () => {
         const udi = new Udi('chia', 'store1', 'rootHash1', 'resourceKey1');
-        const newUdi = udi.fromRootHash('newRootHash');
+        const newUdi = udi.withRootHash('newRootHash');
         expect(newUdi.rootHash).to.equal('newRootHash');
         expect(newUdi.resourceKey).to.equal('resourceKey1');
     });
 
-    it('should create a new Udi with a different resourceKey using fromResourceKey', () => {
+    it('should create a new Udi with a different resourceKey using withResourceKey', () => {
         const udi = new Udi('chia', 'store1', 'rootHash1', 'resourceKey1');
-        const newUdi = udi.fromResourceKey('newResourceKey');
+        const newUdi = udi.withResourceKey('newResourceKey');
         expect(newUdi.resourceKey).to.equal('newResourceKey');
         expect(newUdi.rootHash).to.equal('rootHash1');
     });
