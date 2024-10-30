@@ -41,6 +41,7 @@
     "crypto-js": "^4.2.0",
     "figures": "^6.1.0",
     "fs-extra": "^11.2.0",
+    "hi-base32": "^0.5.1",
     "ignore": "^5.3.2",
     "inquirer": "^10.2.2",
     "lodash": "^4.17.21",
@@ -53,7 +54,9 @@
     "proper-lockfile": "^4.1.2",
     "superagent": "^10.1.0",
     "redis": "^4.7.0",
-    "unzipper": "^0.12.3"
+    "superagent": "^10.0.0",
+    "unzipper": "^0.12.3",
+    "urns": "^0.6.0"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.2",
