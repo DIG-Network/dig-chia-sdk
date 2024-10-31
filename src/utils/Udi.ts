@@ -88,7 +88,7 @@ class Udi {
   static fromUrn(urn: string): Udi {
     const parsedUrn = urns.parseURN(urn);
     if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
-      throw new Error(`Invalid nid: ${parsedUrn.nid}`);
+      throw new Error(`Invalid UDI: ${parsedUrn.nid}`);
     }
 
     const parts = parsedUrn.nss.split(":");
