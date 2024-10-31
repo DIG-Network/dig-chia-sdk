@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.178](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.177...v0.0.1-alpha.178) (2024-10-31)
+
+
+### Features
+
+* allow partial download sync of stores and picking back up ([05efba5](https://github.com/DIG-Network/dig-chia-sdk/commit/05efba5a0582871e39fca9de06865b4033f9961c))
+* udi hex getters ([3a6d1f1](https://github.com/DIG-Network/dig-chia-sdk/commit/3a6d1f1f328880e4245b56a17b298902aa017331))
+
 ### [0.0.1-alpha.177](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.176...v0.0.1-alpha.177) (2024-10-30)
 
 ### [0.0.1-alpha.176](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.175...v0.0.1-alpha.176) (2024-10-30)
