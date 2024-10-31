@@ -64,6 +64,34 @@ class Udi {
     throw new Error("Failed to decode input as a 32-byte buffer.");
   }
 
+  static fromUrn(urn: string): Udi {
+    const parsedUrn = urns.parseURN(urn);
+    if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
+      throw new Error(`Invalid nid: ${parsedUrn.nid}`);
+    }
+
+    const parts = parsedUrn.nss.split(":");
+    if (parts.length < 2) {
+      throw new Error(`Invalid UDI format: ${parsedUrn.nss}`);
+    }
+
+    const chainName = parts[0];
+    const storeId = Udi.convertToBuffer(parts[1].split("/")[0]);
+
+    let rootHash: Buffer | null = null;
+    if (parts.length > 2) {
+      rootHash = Udi.convertToBuffer(parts[2].split("/")[0]);
+    }
+
+    const pathParts = parsedUrn.nss.split("/");
+    let resourceKey: string | null = null;
+    if (pathParts.length > 1) {
+      resourceKey = pathParts.slice(1).join("/");
+    }
+
+    return new Udi(chainName, storeId, rootHash, resourceKey);
+  }
+
   static addBase32Padding(input: string): string {
     const paddingNeeded = (8 - (input.length % 8)) % 8;
     return input + "=".repeat(paddingNeeded);
