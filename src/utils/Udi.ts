@@ -27,36 +27,41 @@ class Udi {
 
   static convertToBuffer(input: string | Buffer): Buffer {
     if (Buffer.isBuffer(input)) {
+      if (input.length !== 32) {
+        throw new Error("Buffer must be exactly 32 bytes.");
+      }
       return input;
     }
 
-    if (Udi.isHex(input)) {
-      return Buffer.from(input, "hex");
+    // Attempt hex decoding
+    if (/^[a-fA-F0-9]+$/.test(input) && input.length === 64) {
+      try {
+        const buffer = Buffer.from(input, "hex");
+        if (buffer.length === 32) return buffer;
+      } catch (e) {
+        console.warn("Hex decoding failed, trying next encoding...");
+      }
     }
 
-    if (Udi.isBase32(input)) {
+    // Attempt Base32 decoding
+    try {
       const paddedInput = Udi.addBase32Padding(input.toUpperCase());
-      return Buffer.from(base32Decode(paddedInput, false));
+      const buffer = Buffer.from(base32Decode(paddedInput, false));
+      if (buffer.length === 32) return buffer;
+    } catch (e) {
+      console.warn("Base32 decoding failed, trying Base64 encoding...");
     }
 
-    if (Udi.isBase64Safe(input)) {
+    // Attempt Base64 (URL-safe) decoding
+    try {
       const standardBase64 = Udi.addBase64Padding(Udi.toStandardBase64(input));
-      return Buffer.from(standardBase64, "base64");
+      const buffer = Buffer.from(standardBase64, "base64");
+      if (buffer.length === 32) return buffer;
+    } catch (e) {
+      throw new Error("Invalid input encoding. Must be 32-byte hex, Base32, or Base64 string.");
     }
 
-    throw new Error("Invalid input encoding. Must be 32-byte hex, Base32, or Base64 URL-safe string.");
-  }
-
-  static isHex(input: string): boolean {
-    return /^[a-fA-F0-9]{64}$/.test(input);
-  }
-
-  static isBase32(input: string): boolean {
-    return /^[a-z2-7]{52}$/.test(input.toLowerCase());
-  }
-
-  static isBase64Safe(input: string): boolean {
-    return /^[A-Za-z0-9\-_]+$/.test(input);
+    throw new Error("Failed to decode input as a 32-byte buffer.");
   }
 
   static addBase32Padding(input: string): string {
@@ -64,53 +69,13 @@ class Udi {
     return input + "=".repeat(paddingNeeded);
   }
 
-  static toStandardBase64(base64Safe: string): string {
-    return base64Safe.replace(/-/g, "+").replace(/_/g, "/");
-  }
-
-  static toBase64Safe(base64Standard: string): string {
-    return base64Standard.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  static toStandardBase64(base64UrlSafe: string): string {
+    return base64UrlSafe.replace(/-/g, "+").replace(/_/g, "/");
   }
 
   static addBase64Padding(base64: string): string {
     const paddingNeeded = (4 - (base64.length % 4)) % 4;
     return base64 + "=".repeat(paddingNeeded);
-  }
-
-  withRootHash(rootHash: string | Buffer | null): Udi {
-    return new Udi(this.chainName, this._storeId, rootHash, this.resourceKey);
-  }
-
-  withResourceKey(resourceKey: string | null): Udi {
-    return new Udi(this.chainName, this._storeId, this._rootHash, resourceKey);
-  }
-
-  static fromUrn(urn: string): Udi {
-    const parsedUrn = urns.parseURN(urn);
-    if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
-      throw new Error(`Invalid UDI: ${parsedUrn.nid}`);
-    }
-
-    const parts = parsedUrn.nss.split(":");
-    if (parts.length < 2) {
-      throw new Error(`Invalid UDI format: ${parsedUrn.nss}`);
-    }
-
-    const chainName = parts[0];
-    const storeId = parts[1].split("/")[0];
-
-    let rootHash: string | null = null;
-    if (parts.length > 2) {
-      rootHash = parts[2].split("/")[0];
-    }
-
-    const pathParts = parsedUrn.nss.split("/");
-    let resourceKey: string | null = null;
-    if (pathParts.length > 1) {
-      resourceKey = pathParts.slice(1).join("/");
-    }
-
-    return new Udi(chainName, storeId, rootHash, resourceKey);
   }
 
   toUrn(encoding: "hex" | "base32" | "base64" = "hex"): string {
@@ -135,9 +100,13 @@ class Udi {
     } else if (encoding === "base32") {
       return base32Encode(buffer).toLowerCase().replace(/=+$/, "");
     } else if (encoding === "base64") {
-      return Udi.toBase64Safe(buffer.toString("base64"));
+      return Udi.toBase64UrlSafe(buffer.toString("base64"));
     }
     throw new Error("Unsupported encoding type");
+  }
+
+  static toBase64UrlSafe(base64Standard: string): string {
+    return base64Standard.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
 
   equals(other: Udi): boolean {
