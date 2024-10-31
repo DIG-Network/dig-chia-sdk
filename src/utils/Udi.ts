@@ -36,12 +36,15 @@ class Udi {
 
     if (Udi.isBase32(input)) {
       const paddedInput = Udi.addBase32Padding(input.toUpperCase());
-      return Buffer.from(base32Decode(paddedInput, false)); // Decode as UTF-8
+      return Buffer.from(base32Decode(paddedInput, false));
     }
 
-    throw new Error(
-      "Invalid input encoding. Must be 32-byte hex or Base32 string."
-    );
+    if (Udi.isBase64Safe(input)) {
+      const standardBase64 = Udi.addBase64Padding(Udi.toStandardBase64(input));
+      return Buffer.from(standardBase64, "base64");
+    }
+
+    throw new Error("Invalid input encoding. Must be 32-byte hex, Base32, or Base64 URL-safe string.");
   }
 
   static isHex(input: string): boolean {
@@ -52,10 +55,26 @@ class Udi {
     return /^[a-z2-7]{52}$/.test(input.toLowerCase());
   }
 
+  static isBase64Safe(input: string): boolean {
+    return /^[A-Za-z0-9\-_]+$/.test(input);
+  }
+
   static addBase32Padding(input: string): string {
-    // Calculate required padding
     const paddingNeeded = (8 - (input.length % 8)) % 8;
     return input + "=".repeat(paddingNeeded);
+  }
+
+  static toStandardBase64(base64Safe: string): string {
+    return base64Safe.replace(/-/g, "+").replace(/_/g, "/");
+  }
+
+  static toBase64Safe(base64Standard: string): string {
+    return base64Standard.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  static addBase64Padding(base64: string): string {
+    const paddingNeeded = (4 - (base64.length % 4)) % 4;
+    return base64 + "=".repeat(paddingNeeded);
   }
 
   withRootHash(rootHash: string | Buffer | null): Udi {
@@ -94,7 +113,7 @@ class Udi {
     return new Udi(chainName, storeId, rootHash, resourceKey);
   }
 
-  toUrn(encoding: "hex" | "base32" = "hex"): string {
+  toUrn(encoding: "hex" | "base32" | "base64" = "hex"): string {
     const storeIdStr = this.bufferToString(this._storeId, encoding);
     let urn = `${Udi.namespace}:${this.chainName}:${storeIdStr}`;
 
@@ -110,10 +129,15 @@ class Udi {
     return urn;
   }
 
-  bufferToString(buffer: Buffer, encoding: "hex" | "base32"): string {
-    return encoding === "hex"
-      ? buffer.toString("hex")
-      : base32Encode(buffer).toLowerCase().replace(/=+$/, "");
+  bufferToString(buffer: Buffer, encoding: "hex" | "base32" | "base64"): string {
+    if (encoding === "hex") {
+      return buffer.toString("hex");
+    } else if (encoding === "base32") {
+      return base32Encode(buffer).toLowerCase().replace(/=+$/, "");
+    } else if (encoding === "base64") {
+      return Udi.toBase64Safe(buffer.toString("base64"));
+    }
+    throw new Error("Unsupported encoding type");
   }
 
   equals(other: Udi): boolean {
@@ -132,12 +156,7 @@ class Udi {
   }
 
   clone(): Udi {
-    return new Udi(
-      this.chainName,
-      this._storeId,
-      this._rootHash,
-      this.resourceKey
-    );
+    return new Udi(this.chainName, this._storeId, this._rootHash, this.resourceKey);
   }
 
   hashCode(): string {
@@ -159,9 +178,15 @@ class Udi {
   }
 
   get rootHashBase32(): string | null {
-    return this._rootHash
-      ? this.bufferToString(this._rootHash, "base32")
-      : null;
+    return this._rootHash ? this.bufferToString(this._rootHash, "base32") : null;
+  }
+
+  get storeIdBase64(): string {
+    return this.bufferToString(this._storeId, "base64");
+  }
+
+  get rootHashBase64(): string | null {
+    return this._rootHash ? this.bufferToString(this._rootHash, "base64") : null;
   }
 }
 
