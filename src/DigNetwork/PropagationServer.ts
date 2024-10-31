@@ -832,7 +832,8 @@ export class PropagationServer {
   }
 
   /**
-   * Static function to handle downloading multiple files from a DataStore based on file paths.
+   * Downloads a store from the specified IP address, saving directly to the main directory,
+   * skipping files that already exist.
    */
   static async downloadStore(
     storeId: string,
@@ -844,7 +845,7 @@ export class PropagationServer {
     // Initialize wallet
     await propagationServer.initializeWallet();
 
-    // Check if the store exists
+    // Verify the store and rootHash existence
     const { storeExists, rootHashExists } =
       await propagationServer.checkStoreExists(rootHash);
     if (!storeExists || !rootHashExists) {
@@ -855,65 +856,48 @@ export class PropagationServer {
     const datFileContent = await propagationServer.fetchFile(`${rootHash}.dat`);
     const root = JSON.parse(datFileContent.toString());
 
-    // Prepare download tasks
-    const downloadTasks = [];
+    // Prepare download tasks, skipping existing files
+    const downloadTasks = Object.entries(root.files)
+      .map(([fileKey, fileData]: [any, any]) => {
+        const dataPath = getFilePathFromSha256(fileData.sha256, "data");
+        const label = Buffer.from(fileKey, "hex").toString("utf-8");
+        const destinationPath = path.join(STORE_PATH, storeId, dataPath);
+        return fs.existsSync(destinationPath)
+          ? null
+          : { label, dataPath: destinationPath };
+      })
+      .filter((task) => task !== null);
 
-    for (const [fileKey, fileData] of Object.entries(root.files)) {
-      const dataPath = getFilePathFromSha256(
-        root.files[fileKey].sha256,
-        "data"
-      );
-      const label = Buffer.from(fileKey, "hex").toString("utf-8");
-      downloadTasks.push({ label, dataPath });
-    }
-
-    // Limit the number of concurrent downloads
-    const concurrencyLimit = 10; // Adjust this number as needed
-
-    // Create a temporary directory
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "downloadStore-"));
+    // Limit concurrent downloads
+    const concurrencyLimit = 10;
 
     try {
-      // Download files to the temporary directory
+      // Download missing files directly to the main directory
       await asyncPool(concurrencyLimit, downloadTasks, async (task) => {
         await propagationServer.downloadFile(
           task.label,
           task.dataPath,
           rootHash,
-          tempDir
+          path.dirname(task.dataPath)
         );
       });
 
-      // Save the rootHash.dat file to the temporary directory
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
+      // Save the rootHash.dat file if it doesn’t exist
+      const datFilePath = path.join(STORE_PATH, storeId, `${rootHash}.dat`);
+      if (!fs.existsSync(datFilePath)) {
+        fs.writeFileSync(datFilePath, datFileContent);
       }
 
-      fs.writeFileSync(path.join(tempDir, `${rootHash}.dat`), datFileContent);
-
-      // Integrity check for the downloaded files was done during the download
-      // Here we want to make sure we got all the files or we reject the download session
+      // Verify all files are present
       for (const [fileKey, fileData] of Object.entries(root.files)) {
-        const dataPath = getFilePathFromSha256(
-          root.files[fileKey].sha256,
-          "data"
-        );
-
-        if (!fs.existsSync(path.join(tempDir, dataPath))) {
-          if (!fs.existsSync(path.join(STORE_PATH, storeId, dataPath))) {
-            throw new Error(
-              `Missing file: ${Buffer.from(fileKey, "hex")}, aborting session.`
-            );
-          }
+        // @ts-ignore
+        const dataPath = getFilePathFromSha256(fileData.sha256, "data");
+        if (!fs.existsSync(path.join(STORE_PATH, storeId, dataPath))) {
+          throw new Error(
+            `Missing file: ${Buffer.from(fileKey, "hex")}, aborting session.`
+          );
         }
       }
-
-      // After all downloads are complete, copy from temp directory to the main directory
-      const destinationDir = path.join(STORE_PATH, storeId);
-      fsExtra.copySync(tempDir, destinationDir, {
-        overwrite: false, // Prevents overwriting existing files
-        errorOnExist: false, // No error if file already exists
-      });
 
       // Generate the manifest file in the main directory
       const dataStore = DataStore.from(storeId);
@@ -921,11 +905,8 @@ export class PropagationServer {
       await dataStore.generateManifestFile();
 
       console.log(green(`✔ All files have been downloaded to ${storeId}.`));
-    } catch (error) {
+    } catch (error: any) {
       console.log(red("✖ Error downloading files:"), error);
-    } finally {
-      // Clean up the temporary directory
-      fsExtra.removeSync(tempDir);
     }
   }
 }
