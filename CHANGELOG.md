@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.179](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.178...v0.0.1-alpha.179) (2024-10-31)
+
+
+### Bug Fixes
+
+* check if store exists in the Datastore.from constuctor ([822c354](https://github.com/DIG-Network/dig-chia-sdk/commit/822c354fd42deb6cdffe1e5e5f5341d9ed624a64))
+
 ### [0.0.1-alpha.178](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.177...v0.0.1-alpha.178) (2024-10-31)
 
 
