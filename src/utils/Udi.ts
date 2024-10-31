@@ -1,13 +1,7 @@
-import * as urns from 'urns';
-import { createHash } from 'crypto';
-import { encode as base32Encode, decode as base32Decode } from 'hi-base32';
+import * as urns from "urns";
+import { createHash } from "crypto";
+import { encode as base32Encode, decode as base32Decode } from "hi-base32";
 
-//
-// This class encapsulates the concept of a Universal Data Identifier (UDI), which is a
-// standardized way to identify resources across the distributed DIG mesh network.
-// The UDI format: urn:dig:chainName:storeId:rootHash/resourceKey
-// This allows unique resource identification across the DIG network.
-//
 class Udi {
   readonly chainName: string;
   private readonly _storeId: Buffer;
@@ -37,14 +31,17 @@ class Udi {
     }
 
     if (Udi.isHex(input)) {
-      return Buffer.from(input, 'hex');
+      return Buffer.from(input, "hex");
     }
 
     if (Udi.isBase32(input)) {
-      return Buffer.from(base32Decode(input, false)); // Decode as UTF-8
+      const paddedInput = Udi.addBase32Padding(input.toUpperCase());
+      return Buffer.from(base32Decode(paddedInput, false)); // Decode as UTF-8
     }
 
-    throw new Error("Invalid input encoding. Must be 32-byte hex or Base32 string.");
+    throw new Error(
+      "Invalid input encoding. Must be 32-byte hex or Base32 string."
+    );
   }
 
   static isHex(input: string): boolean {
@@ -53,6 +50,12 @@ class Udi {
 
   static isBase32(input: string): boolean {
     return /^[a-z2-7]{52}$/.test(input.toLowerCase());
+  }
+
+  static addBase32Padding(input: string): string {
+    // Calculate required padding
+    const paddingNeeded = (8 - (input.length % 8)) % 8;
+    return input + "=".repeat(paddingNeeded);
   }
 
   withRootHash(rootHash: string | Buffer | null): Udi {
@@ -69,29 +72,29 @@ class Udi {
       throw new Error(`Invalid nid: ${parsedUrn.nid}`);
     }
 
-    const parts = parsedUrn.nss.split(':');
+    const parts = parsedUrn.nss.split(":");
     if (parts.length < 2) {
       throw new Error(`Invalid UDI format: ${parsedUrn.nss}`);
     }
 
     const chainName = parts[0];
-    const storeId = parts[1].split('/')[0];
+    const storeId = parts[1].split("/")[0];
 
     let rootHash: string | null = null;
     if (parts.length > 2) {
-      rootHash = parts[2].split('/')[0];
+      rootHash = parts[2].split("/")[0];
     }
 
-    const pathParts = parsedUrn.nss.split('/');
+    const pathParts = parsedUrn.nss.split("/");
     let resourceKey: string | null = null;
     if (pathParts.length > 1) {
-      resourceKey = pathParts.slice(1).join('/');
+      resourceKey = pathParts.slice(1).join("/");
     }
 
     return new Udi(chainName, storeId, rootHash, resourceKey);
   }
 
-  toUrn(encoding: 'hex' | 'base32' = 'hex'): string {
+  toUrn(encoding: "hex" | "base32" = "hex"): string {
     const storeIdStr = this.bufferToString(this._storeId, encoding);
     let urn = `${Udi.namespace}:${this.chainName}:${storeIdStr}`;
 
@@ -107,17 +110,19 @@ class Udi {
     return urn;
   }
 
-  bufferToString(buffer: Buffer, encoding: 'hex' | 'base32'): string {
-    return encoding === 'hex'
-      ? buffer.toString('hex')
-      : base32Encode(buffer).toLowerCase().replace(/=+$/, '');
+  bufferToString(buffer: Buffer, encoding: "hex" | "base32"): string {
+    return encoding === "hex"
+      ? buffer.toString("hex")
+      : base32Encode(buffer).toLowerCase().replace(/=+$/, "");
   }
 
   equals(other: Udi): boolean {
     return (
       this._storeId.equals(other._storeId) &&
       this.chainName === other.chainName &&
-      (this._rootHash && other._rootHash ? this._rootHash.equals(other._rootHash) : this._rootHash === other._rootHash) &&
+      (this._rootHash && other._rootHash
+        ? this._rootHash.equals(other._rootHash)
+        : this._rootHash === other._rootHash) &&
       this.resourceKey === other.resourceKey
     );
   }
@@ -127,34 +132,37 @@ class Udi {
   }
 
   clone(): Udi {
-    return new Udi(this.chainName, this._storeId, this._rootHash, this.resourceKey);
+    return new Udi(
+      this.chainName,
+      this._storeId,
+      this._rootHash,
+      this.resourceKey
+    );
   }
 
   hashCode(): string {
-    const hash = createHash('sha256');
+    const hash = createHash("sha256");
     hash.update(this.toUrn());
-    return hash.digest('hex');
+    return hash.digest("hex");
   }
 
-  // Getter for storeId as a hex string
   get storeId(): string {
-    return this._storeId.toString('hex');
+    return this._storeId.toString("hex");
   }
 
-  // Getter for rootHash as a hex string
   get rootHash(): string | null {
-    return this._rootHash ? this._rootHash.toString('hex') : null;
+    return this._rootHash ? this._rootHash.toString("hex") : null;
   }
 
-    // Getter for storeId as a hex string
-    get storeIdBase32(): string {
-      return this.bufferToString(this._storeId, 'base32') ;
-    }
-  
-    // Getter for rootHash as a hex string
-    get rootHashBase32(): string | null {
-      return this._rootHash ? this.bufferToString(this._rootHash, 'base32') : null;
-    }
+  get storeIdBase32(): string {
+    return this.bufferToString(this._storeId, "base32");
+  }
+
+  get rootHashBase32(): string | null {
+    return this._rootHash
+      ? this.bufferToString(this._rootHash, "base32")
+      : null;
+  }
 }
 
 export { Udi };

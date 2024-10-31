@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.181](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.180...v0.0.1-alpha.181) (2024-10-31)
+
+
+### Features
+
+* add base32 getters to udi class ([8b5d18f](https://github.com/DIG-Network/dig-chia-sdk/commit/8b5d18fcbb8ca07100978f19ae476c41bbd419a6))
+
 ### [0.0.1-alpha.180](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.179...v0.0.1-alpha.180) (2024-10-31)
 
 
