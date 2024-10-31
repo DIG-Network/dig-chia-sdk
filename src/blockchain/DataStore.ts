@@ -102,6 +102,10 @@ export class DataStore {
   }
 
   public static from(storeId: string | Buffer, rootHash?: string): DataStore {
+    if (!fs.existsSync(path.join(STORE_PATH, storeId.toString("hex")))) {
+      throw new Error(`Store with ID ${storeId.toString("hex")} does not exist.`);
+    }
+
     const existingTreeOptions: DataIntegrityTreeOptions = {
       storageMode: "local",
       storeDir: STORE_PATH,
