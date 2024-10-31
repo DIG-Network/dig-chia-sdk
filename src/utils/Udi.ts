@@ -145,6 +145,16 @@ class Udi {
   get rootHash(): string | null {
     return this._rootHash ? this._rootHash.toString('hex') : null;
   }
+
+    // Getter for storeId as a hex string
+    get storeIdBase32(): string {
+      return this.bufferToString(this._storeId, 'base32') ;
+    }
+  
+    // Getter for rootHash as a hex string
+    get rootHashBase32(): string | null {
+      return this._rootHash ? this.bufferToString(this._rootHash, 'base32') : null;
+    }
 }
 
 export { Udi };
