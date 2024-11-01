@@ -29,12 +29,12 @@ class Udi {
     if (!/^[a-fA-F0-9]{64}$/.test(input)) {
       throw new Error("Input must be a 64-character hex string.");
     }
-    return input.toLowerCase();
+    return input;
   }
 
   static fromUrn(urn: string): Udi {
     const parsedUrn = urns.parseURN(urn);
-    if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
+    if (parsedUrn.nid !== Udi.nid) {
       throw new Error(`Invalid nid: ${parsedUrn.nid}`);
     }
 
@@ -62,11 +62,11 @@ class Udi {
 
   static convertToHex(input: string): string {
     // Attempt hex conversion first
-    if (/^[a-fA-F0-9]{64}$/.test(input)) return input.toLowerCase();
+    if (/^[a-fA-F0-9]{64}$/.test(input)) return input;
 
     // Convert from Base32
     try {
-      const paddedInput = Udi.addBase32Padding(input.toUpperCase());
+      const paddedInput = Udi.addBase32Padding(input);
       const buffer = Buffer.from(base32Decode(paddedInput, false));
       return buffer.toString("hex");
     } catch (e) {
@@ -118,7 +118,7 @@ class Udi {
     if (encoding === "hex") {
       return hexString;
     } else if (encoding === "base32") {
-      return base32Encode(buffer).toLowerCase().replace(/=+$/, "");
+      return base32Encode(buffer).replace(/=+$/, "");
     } else if (encoding === "base64") {
       return Udi.toBase64UrlSafe(buffer.toString("base64"));
     }
