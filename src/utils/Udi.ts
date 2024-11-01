@@ -65,6 +65,7 @@ class Udi {
   }
 
   static fromUrn(urn: string): Udi {
+    console.log(`Parsing URN: ${urn}`);
     const parsedUrn = urns.parseURN(urn);
     if (parsedUrn.nid.toLowerCase() !== Udi.nid) {
       throw new Error(`Invalid nid: ${parsedUrn.nid}`);
