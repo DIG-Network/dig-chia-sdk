@@ -61,9 +61,6 @@ class Udi {
   }
 
   static convertToHex(input: string): string {
-    // Attempt hex conversion first
-    if (/^[a-fA-F0-9]{64}$/.test(input)) return input;
-
     // Convert from Base32
     try {
       const paddedInput = Udi.addBase32Padding(input.toUpperCase());
@@ -73,13 +70,11 @@ class Udi {
       console.warn("Base32 decoding failed, trying Base64 encoding...");
     }
 
-    // Convert from Base64
-    try {
-      const standardBase64 = Udi.addBase64Padding(Udi.toStandardBase64(input));
-      const buffer = Buffer.from(standardBase64, "base64");
-      return buffer.toString("hex");
-    } catch (e) {
-      throw new Error("Invalid input encoding. Must be 32-byte hex, Base32, or Base64 string.");
+    // Attempt hex conversion first
+    if (/^[a-fA-F0-9]{64}$/.test(input)) {
+      return input;
+    } else {
+      throw new Error("Input must be a 64-character hex string.");
     }
   }
 
@@ -88,21 +83,15 @@ class Udi {
     return input + "=".repeat(paddingNeeded);
   }
 
-  static toStandardBase64(base64UrlSafe: string): string {
-    return base64UrlSafe.replace(/-/g, "+").replace(/_/g, "/");
-  }
-
-  static addBase64Padding(base64: string): string {
-    const paddingNeeded = (4 - (base64.length % 4)) % 4;
-    return base64 + "=".repeat(paddingNeeded);
-  }
-
-  toUrn(encoding: "hex" | "base32" | "base64" = "hex"): string {
+  toUrn(encoding: "hex" | "base32" = "hex"): string {
     const storeIdStr = this.formatBufferAsEncoding(this._storeIdHex, encoding);
     let urn = `${Udi.namespace}:${this.chainName}:${storeIdStr}`;
 
     if (this._rootHashHex) {
-      const rootHashStr = this.formatBufferAsEncoding(this._rootHashHex, encoding);
+      const rootHashStr = this.formatBufferAsEncoding(
+        this._rootHashHex,
+        encoding
+      );
       urn += `:${rootHashStr}`;
     }
 
@@ -113,20 +102,17 @@ class Udi {
     return urn;
   }
 
-  private formatBufferAsEncoding(hexString: string, encoding: "hex" | "base32" | "base64"): string {
+  private formatBufferAsEncoding(
+    hexString: string,
+    encoding: "hex" | "base32"
+  ): string {
     const buffer = Buffer.from(hexString, "hex");
     if (encoding === "hex") {
       return hexString;
     } else if (encoding === "base32") {
       return base32Encode(buffer).replace(/=+$/, ""); // Strip padding for Base32
-    } else if (encoding === "base64") {
-      return Udi.toBase64UrlSafe(buffer.toString("base64")); // Convert to URL-safe Base64
     }
     throw new Error("Unsupported encoding type");
-  }
-
-  static toBase64UrlSafe(base64Standard: string): string {
-    return base64Standard.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   }
 
   equals(other: Udi): boolean {
@@ -145,7 +131,12 @@ class Udi {
   }
 
   clone(): Udi {
-    return new Udi(this.chainName, this._storeIdHex, this._rootHashHex, this.resourceKey);
+    return new Udi(
+      this.chainName,
+      this._storeIdHex,
+      this._rootHashHex,
+      this.resourceKey
+    );
   }
 
   hashCode(): string {
@@ -167,15 +158,9 @@ class Udi {
   }
 
   get rootHashBase32(): string | null {
-    return this._rootHashHex ? this.formatBufferAsEncoding(this._rootHashHex, "base32") : null;
-  }
-
-  get storeIdBase64(): string {
-    return this.formatBufferAsEncoding(this._storeIdHex, "base64");
-  }
-
-  get rootHashBase64(): string | null {
-    return this._rootHashHex ? this.formatBufferAsEncoding(this._rootHashHex, "base64") : null;
+    return this._rootHashHex
+      ? this.formatBufferAsEncoding(this._rootHashHex, "base32")
+      : null;
   }
 }
 
