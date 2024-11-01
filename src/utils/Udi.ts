@@ -99,6 +99,7 @@ class Udi {
   }
 
   static toStandardBase64(base64UrlSafe: string): string {
+    // Convert URL-safe Base64 to standard Base64
     return base64UrlSafe.replace(/-/g, "+").replace(/_/g, "/");
   }
 
