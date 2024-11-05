@@ -83,14 +83,14 @@ class Udi {
     return input + "=".repeat(paddingNeeded);
   }
 
-  toUrn(encoding: "hex" | "base32" = "hex"): string {
-    const storeIdStr = this.formatBufferAsEncoding(this._storeIdHex, encoding);
+  toUrn(): string {
+    const storeIdStr = this.formatBufferAsEncoding(this._storeIdHex, "hex");
     let urn = `${Udi.namespace}:${this.chainName}:${storeIdStr}`;
 
     if (this._rootHashHex) {
       const rootHashStr = this.formatBufferAsEncoding(
         this._rootHashHex,
-        encoding
+        "hex"
       );
       urn += `:${rootHashStr}`;
     }
