@@ -108,12 +108,12 @@ class Udi {
     return base64 + "=".repeat(paddingNeeded);
   }
 
-  toUrn(encoding: "hex" | "base32" | "base64" = "hex"): string {
-    const storeIdStr = this.bufferToString(this._storeId, encoding);
+  toUrn(): string {
+    const storeIdStr = this.bufferToString(this._storeId, "hex");
     let urn = `${Udi.namespace}:${this.chainName}:${storeIdStr}`;
 
     if (this._rootHash) {
-      const rootHashStr = this.bufferToString(this._rootHash, encoding);
+      const rootHashStr = this.bufferToString(this._rootHash, "hex");
       urn += `:${rootHashStr}`;
     }
 
