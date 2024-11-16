@@ -4,6 +4,7 @@ import { URL } from "url";
 import { Readable } from "stream";
 import { formatHost, getOrCreateSSLCerts } from "../utils";
 import NodeCache from "node-cache";
+import { Udi } from "../utils";
 
 const hasRootHashCache = new NodeCache({ stdTTL: 86400 });
 const wellKnownCache = new NodeCache({ stdTTL: 86400 });
@@ -32,10 +33,12 @@ export class ContentServer {
     rootHash: string,
     challengeHex?: string
   ): Promise<string> {
+    const udi = new Udi("chia", this.storeId, rootHash, key);
+
     // Construct the base URL
     let url = `https://${formatHost(this.ipAddress)}:${
       ContentServer.port
-    }/chia.${this.storeId}.${rootHash}/${key}`;
+    }/${udi.toString()}`;
 
     // If a challenge is provided, append it as a query parameter
     if (challengeHex) {
@@ -47,10 +50,12 @@ export class ContentServer {
 
   // New method to get only the first chunk of the content
   public async getKeyChunk(key: string, rootHash: string): Promise<Buffer> {
+    const udi = new Udi("chia", this.storeId, rootHash, key);
+
     // Construct the base URL
     let url = `https://${formatHost(this.ipAddress)}:${
       ContentServer.port
-    }/chia.${this.storeId}.${rootHash}/${key}`;
+    }/${udi.toString()}`;
     return this.fetchFirstChunk(url);
   }
 
@@ -119,15 +124,11 @@ export class ContentServer {
   // Method to get the index of keys in a store
   public async getKeysIndex(rootHash?: string): Promise<any> {
     try {
-      let udi = `chia.${this.storeId}`;
-
-      if (rootHash) {
-        udi += `.${rootHash}`;
-      }
+      const udi = new Udi("chia", this.storeId, rootHash);
 
       const url = `https://${formatHost(this.ipAddress)}:${
         ContentServer.port
-      }/${udi}`;
+      }/${udi.toString()}`;
       return this.fetchJson(url);
     } catch (error: any) {
       if (rootHash) {
@@ -143,15 +144,11 @@ export class ContentServer {
     rootHash?: string
   ): Promise<{ success: boolean; headers?: http.IncomingHttpHeaders }> {
     try {
-      let udi = `chia.${this.storeId}`;
-
-      if (rootHash) {
-        udi += `.${rootHash}`;
-      }
+      const udi = new Udi("chia", this.storeId, rootHash, key);
 
       const url = `https://${formatHost(this.ipAddress)}:${
         ContentServer.port
-      }/${udi}/${key}`;
+      }/${udi.toString()}`;
       return this.head(url);
     } catch (error: any) {
       if (rootHash) {
@@ -166,10 +163,11 @@ export class ContentServer {
     success: boolean;
     headers?: http.IncomingHttpHeaders;
   }> {
+    const udi = new Udi("chia", this.storeId);
     try {
       let url = `https://${formatHost(this.ipAddress)}:${
         ContentServer.port
-      }/chia.${this.storeId}`;
+      }/${udi.toString()}`;
 
       if (options?.hasRootHash) {
         url += `?hasRootHash=${options.hasRootHash}`;
@@ -218,16 +216,12 @@ export class ContentServer {
   }
 
   public streamKey(key: string, rootHash?: string): Promise<Readable> {
-    let udi = `chia.${this.storeId}`;
-
-    if (rootHash) {
-      udi += `.${rootHash}`;
-    }
+    const udi = new Udi("chia", this.storeId, rootHash, key);
 
     return new Promise((resolve, reject) => {
       const url = `https://${formatHost(this.ipAddress)}:${
         ContentServer.port
-      }/${udi}/${key}`;
+      }/${udi.toString()}`;
       const urlObj = new URL(url);
 
       const requestOptions = {
