@@ -109,7 +109,9 @@ export const getStoresList = (): string[] => {
   return folders.filter(
     (folder) =>
       /^[a-f0-9]{64}$/.test(folder) &&
-      fs.lstatSync(path.join(STORE_PATH, folder)).isDirectory()
+      fs.lstatSync(path.join(STORE_PATH, folder)).isDirectory() &&
+      // temp fix to remove folder that is causing issues
+      folder !== "a3f1b2c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f80")
   );
 };
 
