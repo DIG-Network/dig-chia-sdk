@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.195](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.194...v0.0.1-alpha.195) (2024-11-16)
+
+
+### Bug Fixes
+
+* use udi in content server class ([2afc04a](https://github.com/DIG-Network/dig-chia-sdk/commit/2afc04afce52d13cd69d80dc0d5e668ef10ea180))
+
 ### [0.0.1-alpha.194](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.193...v0.0.1-alpha.194) (2024-11-16)
 
 
