@@ -30,6 +30,7 @@
     "archiver": "^7.0.1",
     "async-mutex": "^0.5.0",
     "axios": "^1.7.7",
+    "base-x": "^5.0.0",
     "bip39": "^3.1.0",
     "bottleneck": "^2.19.5",
     "chia-bls": "^1.0.2",
