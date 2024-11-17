@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.0.1-alpha.196](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.195...v0.0.1-alpha.196) (2024-11-17)
+
+
+### Features
+
+* add subdomain encoder ([f9f2da4](https://github.com/DIG-Network/dig-chia-sdk/commit/f9f2da499dff1c2b158945be3ca238cad9de0f3a))
+
 ### [0.0.1-alpha.195](https://github.com/DIG-Network/dig-chia-sdk/compare/v0.0.1-alpha.194...v0.0.1-alpha.195) (2024-11-16)
 
 
