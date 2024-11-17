@@ -1,13 +1,12 @@
 // SubDomain.ts
 
 import baseX from "base-x";
-import crypto from "crypto";
 
 /**
  * SubDomain Class
  *
  * Encapsulates the logic for encoding and decoding a combination of
- * chain and storeId into a DNS-friendly identifier using Base62 encoding and HMAC.
+ * chain and storeId into a DNS-friendly identifier using Base62 encoding.
  */
 class SubDomain {
   // Define the Base62 character set
@@ -18,12 +17,7 @@ class SubDomain {
   private static base62 = baseX(SubDomain.BASE62_CHARSET);
 
   // Define expected byte length for storeId
-  private static readonly DEFAULT_STORE_ID_LENGTH = 32; // bytes
-  private static readonly HMAC_LENGTH = 32; // bytes for HMAC-SHA256
-
-  // Hardcoded compression key
-  private static readonly COMPRESSION_KEY =
-    "7a4e8d2f6b1c9a3f5d8e2c4b7a1f9d3e6b8c5a2f4d7e9b1c8a3f5d2e6b9c4a7";
+  private static readonly STORE_ID_LENGTH = 32; // bytes
 
   // Properties
   public readonly chain: string;
@@ -44,9 +38,9 @@ class SubDomain {
   }
 
   /**
-   * Encodes the provided chain and storeId into a DNS-friendly identifier with HMAC.
+   * Encodes the provided chain and storeId into a DNS-friendly identifier.
    *
-   * @returns The Base62-encoded identifier with appended HMAC.
+   * @returns The Base62-encoded identifier.
    * @throws Will throw an error if encoding fails.
    */
   private encode(): string {
@@ -83,9 +77,9 @@ class SubDomain {
     const storeIdBuffer = Buffer.from(this.storeId, "hex");
 
     // Validate storeId byte length
-    if (storeIdBuffer.length !== SubDomain.DEFAULT_STORE_ID_LENGTH) {
+    if (storeIdBuffer.length !== SubDomain.STORE_ID_LENGTH) {
       throw new Error(
-        `Invalid storeId length: Expected ${SubDomain.DEFAULT_STORE_ID_LENGTH} bytes, got ${storeIdBuffer.length} bytes.`
+        `Invalid storeId length: Expected ${SubDomain.STORE_ID_LENGTH} bytes, got ${storeIdBuffer.length} bytes.`
       );
     }
 
@@ -96,16 +90,8 @@ class SubDomain {
       storeIdBuffer,
     ]);
 
-    // Create HMAC using SHA256
-    const hmac = crypto.createHmac("sha256", SubDomain.COMPRESSION_KEY);
-    hmac.update(dataBuffer);
-    const hmacDigest = hmac.digest(); // 32 bytes
-
-    // Concatenate dataBuffer and hmacDigest
-    const finalBuffer = Buffer.concat([dataBuffer, hmacDigest]);
-
-    // Encode the final buffer using Base62
-    const encodedId = SubDomain.base62.encode(finalBuffer);
+    // Encode the data buffer using Base62
+    const encodedId = SubDomain.base62.encode(dataBuffer);
 
     // Ensure DNS label length does not exceed 63 characters
     if (encodedId.length > 63) {
@@ -118,11 +104,11 @@ class SubDomain {
   }
 
   /**
-   * Decodes the provided identifier back into the original chain and storeId after verifying HMAC.
+   * Decodes the provided identifier back into the original chain and storeId.
    *
-   * @param encodedId - The Base62-encoded identifier with appended HMAC.
+   * @param encodedId - The Base62-encoded identifier.
    * @returns An object containing the original chain and storeId.
-   * @throws Will throw an error if decoding fails, HMAC verification fails, or data lengths mismatch.
+   * @throws Will throw an error if decoding fails or data lengths mismatch.
    */
   public static decode(encodedId: string): { chain: string; storeId: string } {
     // Validate input
@@ -139,11 +125,8 @@ class SubDomain {
       throw new Error("Failed to decode Base62 string.");
     }
 
-    // Ensure there's at least 1 byte for chain_length and 64 bytes for storeId and HMAC
-    if (
-      decodedBuffer.length <
-      1 + SubDomain.DEFAULT_STORE_ID_LENGTH + SubDomain.HMAC_LENGTH
-    ) {
+    // Ensure there's at least 1 byte for chain_length and STORE_ID_LENGTH bytes for storeId
+    if (decodedBuffer.length < 1 + SubDomain.STORE_ID_LENGTH) {
       throw new Error("Decoded data is too short to contain required fields.");
     }
 
@@ -151,11 +134,7 @@ class SubDomain {
     const chain_length = Buffer.from(decodedBuffer).readUInt8(0);
 
     // Define the expected total length
-    const expected_length =
-      1 +
-      chain_length +
-      SubDomain.DEFAULT_STORE_ID_LENGTH +
-      SubDomain.HMAC_LENGTH;
+    const expected_length = 1 + chain_length + SubDomain.STORE_ID_LENGTH;
 
     if (decodedBuffer.length !== expected_length) {
       throw new Error(
@@ -163,32 +142,12 @@ class SubDomain {
       );
     }
 
-    // Extract chain, storeId, and received HMAC from the buffer
-    const chain = Buffer.from(
-      decodedBuffer.slice(1, 1 + chain_length)
-    ).toString("utf8");
+    // Extract chain and storeId from the buffer
+    const chain = Buffer.from(decodedBuffer.slice(1, 1 + chain_length)).toString("utf8");
     const storeIdBuffer = decodedBuffer.slice(
       1 + chain_length,
-      1 + chain_length + SubDomain.DEFAULT_STORE_ID_LENGTH
+      1 + chain_length + SubDomain.STORE_ID_LENGTH
     );
-    const receivedHmac = decodedBuffer.slice(
-      1 + chain_length + SubDomain.DEFAULT_STORE_ID_LENGTH,
-      expected_length
-    );
-
-    // Recompute HMAC over [chain_length][chain][storeId]
-    const dataBuffer = decodedBuffer.slice(
-      0,
-      1 + chain_length + SubDomain.DEFAULT_STORE_ID_LENGTH
-    );
-    const hmac = crypto.createHmac("sha256", SubDomain.COMPRESSION_KEY);
-    hmac.update(dataBuffer);
-    const expectedHmac = hmac.digest(); // 32 bytes
-
-    // Compare HMACs securely
-    if (!crypto.timingSafeEqual(receivedHmac, expectedHmac)) {
-      throw new Error("HMAC verification failed: Invalid identifier.");
-    }
 
     // Convert storeId buffer to hex string
     const storeId = Buffer.from(storeIdBuffer).toString("hex");
