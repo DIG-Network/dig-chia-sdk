@@ -469,6 +469,7 @@ export class FullNodePeer {
                 error.message.includes("WebSocket") ||
                 error.message.includes("Operation timed out")
               ) {
+                console.log('Running getBestPeer from createPeerProxy...')
                 const newPeer = await this.getBestPeer();
                 return (newPeer as any)[prop](...args);
               }
